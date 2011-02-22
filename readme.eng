@@ -1,0 +1,109 @@
+                                kipcfg v0.1.0
+                               ---------------
+                            
+1. Introduction
+---------------
+  
+  This program is intended to allocate IP address automatically from DHCP 
+server.
+
+2. Development Environments  
+---------------------------
+  
+  - OS/2 Warp v4 for Korean with FixPak #15
+  
+  - Open Watcom v1.8
+  
+3. Requirement
+--------------
+
+  - TCP/IP v4.3
+
+4. Test Environmet
+------------------
+
+  This program is tested on OS/2 Warp v4 for Korean with FixPak #15.
+
+5. Features
+-----------
+
+  - Support multiple interfaces
+  
+  - Support to allocate IP address only
+
+6. Installation
+---------------
+
+  Put kipcfg.exe into any directory.
+  
+7. Usage
+---------
+
+7.1. How to execute
+-------------------
+
+    kipcfg /req if | /rel if | /iponly | /wait | /q
+
+7.2. Options
+------------
+    if          interface name such as lan0
+    /req        request IP address for the specefied interface
+    /rel        release IP address for the specified interface
+    /iponly     set IP address only for the specified interface
+                ( When you don't want to set a default gateway and DNS server )
+    /wait       wait for the IP address to be assigned
+    /q          quit kipcfg daemon
+  
+8. Limits/Known bugs
+--------------------
+
+  - Do not check the conflict of the IP address allocated from DHCP server
+  
+  - Use 172.xx.100.100 temporarily( xx is 16 ~ 31 )
+  
+  - Activate LOOPBACK interface
+  
+9. TODOs...
+-----------
+
+  - Replace ifconfig.exe with socket APIs
+  
+  - Check the conflict of IP address
+  
+  - Do not use temporary IP address
+  
+10. History
+---------------
+
+  - test version ( 2011/02/23 )
+    .initial release
+    
+11. Compilation
+---------------
+ 
+  All you have to do is to install Open Watcom v1.8 to compile kipcfg.
+  Now, enter 'wmake' on command prompt.
+  
+12. Modules
+-------------
+
+  kipcfg.exe : the executable of kipcfg
+
+13. Donation
+------------
+
+  If you are satisfied with this program and want to donate to me, please visit
+the following URL.
+
+    http://www.ecomstation.co.kr/komh/donate.html
+
+14. Contact
+-----------
+
+  e-mail : komh@chollian.net
+  ICQ    : 124861818
+  MSN    : komh@chollian.net
+  IRC    : lvzuufx, #os2 at HANIRC(irc.hanirc.org)
+               
+                                                       KO Myung-Hun
+               
