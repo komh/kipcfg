@@ -71,7 +71,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
 
         if( need_ifname )
         {
-            if( !strncmp( argv[ i ], "lan", 3 ))
+            if( !strncmp( argv[ i ], "lan", 3 ) && strlen( argv[ i ]) == 4 )
             {
                 opts->ifnum = atoi( argv[ i ] + 3 );
             }
@@ -125,6 +125,14 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         }
         else
             invalid = 1;
+
+        if( i + 1 == argc && need_ifname )
+        {
+            fprintf( stderr, "Missing interface!!!\n" );
+            show_usage();
+
+            exit( 1 );
+        }
 
         if( i + 1 == argc && need_secs )
         {
