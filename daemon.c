@@ -199,6 +199,17 @@ static void ip_assign( void *arg )
             }
         }
 
+        // to prevent xid conflicts
+        DosRequestMutexSem( info->hmtx, SEM_INDEFINITE_WAIT );
+
+        // check if 'quit' was asked while waiting mutex
+        if( info->quit )
+        {
+            DosReleaseMutexSem( info->hmtx );
+
+            break;
+        }
+
         ifc = ifconfig_init( info->ifnum, init_state );
 
         use_broadcast = info->state == DHCPC_STATE_INIT ||
@@ -206,17 +217,6 @@ static void ip_assign( void *arg )
 
         if( use_broadcast )
         {
-            // to use a broadcast address exclusively
-            DosRequestMutexSem( info->hmtx, SEM_INDEFINITE_WAIT );
-
-            if( info->quit )
-            {
-                DosReleaseMutexSem( info->hmtx );
-
-                ifconfig_done( ifc );
-                break;
-            }
-
             router_delete_ip( r, htonl( ROUTER_BROADCAST ), 0,
                               ROUTER_DELETE_ALL );
 
@@ -291,10 +291,9 @@ static void ip_assign( void *arg )
                     dhcpc_state_str[ info->state ]);
         }
 
-        if( use_broadcast )
-            DosReleaseMutexSem( info->hmtx );
-
         ifconfig_done( ifc );
+
+        DosReleaseMutexSem( info->hmtx );
     } while( !info->quit );
 
     router_done( r );
