@@ -23,11 +23,11 @@
 #include "dhcp_socks.h"
 
 
-int dhcp_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
-int dhcp_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
-                  int state );
-int dhcp_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
-int dhcp_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
+int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
+int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
+                   int state );
+int dhcpc_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
+int dhcpc_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
 
 #endif
 
