@@ -36,7 +36,7 @@
 #include "dhcpc.h"
 
 // in seconds
-#define DHCP_REPLY_WAIT_TIME    11
+#define DHCP_REPLY_WAIT_TIME    5
 
 static const char *dhcp_msg_type_str[] = {
     "DHCP message type string",
