@@ -225,8 +225,8 @@ static void ip_assign( void *arg )
         }
 
         if(( !init_state ||
-             dhcp_discover( info->ifnum, info->ds, &info->dp ) == 0 ) &&
-            dhcp_request( info->ifnum, info->ds, &info->dp, info->state ) == 0 )
+             dhcpc_discover( info->ifnum, info->ds, &info->dp ) == 0 ) &&
+            dhcpc_request( info->ifnum, info->ds, &info->dp, info->state ) == 0 )
         {
             struct    dhcp_options *dopts;
             int       i;
@@ -306,7 +306,7 @@ static void ip_release( struct if_info *info )
 
     info->ip_status = IP_STATUS_RELEASING;
 
-    dhcp_release( info->ifnum, info->ds, &info->dp );
+    dhcpc_release( info->ifnum, info->ds, &info->dp );
 
     info->quit = 1;
     DosWaitThread( &info->tid, DCWW_WAIT );

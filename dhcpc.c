@@ -256,7 +256,7 @@ static u_int32_t make_xid( void )
     return tv.tv_sec + tv.tv_usec;
 }
 
-int dhcp_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
 {
     u_int32_t xid;
     struct    dhcp_packet packet;
@@ -282,7 +282,7 @@ int dhcp_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
     return 0;
 }
 
-int dhcp_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
+int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
                   int state )
 {
     u_int32_t xid;
@@ -313,7 +313,7 @@ int dhcp_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
     return 0;
 }
 
-int dhcp_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int dhcpc_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
 {
     dp->xid   = make_xid();
     dp->flags = 0;
@@ -323,7 +323,7 @@ int dhcp_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
     return 0;
 }
 
-int dhcp_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int dhcpc_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
 {
     u_int32_t xid;
 
