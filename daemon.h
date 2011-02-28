@@ -55,10 +55,18 @@ struct daemon_msg
 };
 #pragma pack()
 
+struct if_sem;
+
 int  daemon_main( void );
 void daemon_start( const char *kipcfg_exe );
 int  daemon_call( struct daemon_msg *dm );
 int  daemon_alive( void );
+
+struct if_sem *daemon_if_sem_create( int ifnum );
+struct if_sem *daemon_if_sem_open( int ifnum );
+void   daemon_if_sem_close( struct if_sem *sem );
+int    daemon_if_sem_wait( struct if_sem *sem, int secs );
+void   daemon_if_sem_post( struct if_sem *sem );
 
 #endif
 

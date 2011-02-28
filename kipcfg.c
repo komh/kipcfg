@@ -40,13 +40,13 @@ struct options
 static void show_usage( void )
 {
     fprintf( stderr, "\n");
-    fprintf( stderr, "Usage: kipcfg /req interface | /rel interface | /iponly | /wait | /q\n");
+    fprintf( stderr, "Usage: kipcfg /req interface | /rel interface | /iponly | /wait secs | /q\n");
     fprintf( stderr, "\n");
     fprintf( stderr, "Options\n");
     fprintf( stderr, "\t/req    : request IP address for the specefied interface\n");
     fprintf( stderr, "\t/rel    : release IP address for the specified interface\n");
     fprintf( stderr, "\t/iponly : set IP address only for the specified interface\n");
-    fprintf( stderr, "\t/wait   : wait for the IP address to be assigned\n");
+    fprintf( stderr, "\t/wait   : wait for the IP address to be assigned up to maximum secs\n");
     fprintf( stderr, "\t/q      : quit kipcfg daemon\n");
     fprintf( stderr, "\n");
 }
@@ -54,6 +54,7 @@ static void show_usage( void )
 static void parse_options( int argc, char *argv[], struct options *opts )
 {
     int need_ifname;
+    int need_secs;
     int invalid;
     int i;
 
@@ -63,6 +64,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
     memset( opts, 0, sizeof( *opts ));
 
     need_ifname = 0;
+    need_secs   = 0;
     for( i = 1; i < argc; i++ )
     {
         invalid = 0;
@@ -77,6 +79,25 @@ static void parse_options( int argc, char *argv[], struct options *opts )
                 invalid = 1;
 
             need_ifname = 0;
+        }
+        else if( need_secs )
+        {
+            int secs = atoi( argv[ i ]);
+
+            if( secs )
+            {
+                if( secs < 1 )
+                    secs = 1;
+
+                if( secs > 60 )
+                    secs = 60;
+
+                opts->wait = secs;
+            }
+            else
+                invalid = 1;
+
+            need_secs = 0;
         }
         else if( !stricmp( argv[ i ], "/req") || !stricmp( argv[ i ], "-req"))
         {
@@ -96,7 +117,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         }
         else if( !stricmp( argv[ i ], "/wait") || !stricmp( argv[ i ], "-wait"))
         {
-            opts->wait = 1;
+            need_secs = 1;
         }
         else if( !stricmp( argv[ i ], "/q") || !stricmp( argv[ i ], "-q"))
         {
@@ -104,6 +125,14 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         }
         else
             invalid = 1;
+
+        if( i + 1 == argc && need_secs )
+        {
+            fprintf( stderr, "Missing maximum wait time!!!\n");
+            show_usage();
+
+            exit( 1 );
+        }
 
         if( invalid )
         {
@@ -153,29 +182,61 @@ int main( int argc, char *argv[])
 
     if( opts.mode == MODE_REQUEST )
     {
-        while( 1 )
+        struct if_sem *sem;
+
+        if( opts.wait )
         {
-            dm.msg    = DCDM_REQUEST;
-            dm.arg    = opts.ifnum;
-            dm.iponly = opts.iponly;
-            dm.wait   = opts.wait;
-            daemon_call( &dm );
+            sem = daemon_if_sem_open( opts.ifnum );
+            if( sem )
+            {
+                fprintf( stderr, "Configuring IP address for interface lan%d is still progressing...\n",
+                         opts.ifnum );
+                fprintf( stderr, "Please wait to finish it\n");
 
-            if( !dm.wait || dm.msg != DCDE_IP_ASSIGNING )
-                break;
+                daemon_if_sem_close( sem );
 
-            sleep( 1 );
+                return 0;
+            }
+
+            sem = daemon_if_sem_create( opts.ifnum );
         }
 
+        dm.msg    = DCDM_REQUEST;
+        dm.arg    = opts.ifnum;
+        dm.iponly = opts.iponly;
+        dm.wait   = opts.wait;
+        daemon_call( &dm );
+
+        if( opts.wait )
+        {
+            if( daemon_if_sem_wait( sem, opts.wait ) < 0 )
+            {
+                fprintf( stdout, "Configuring IP address for interface lan%d is progressing...\n",
+                         opts.ifnum );
+            }
+            else if( dm.msg == DCDE_IP_ALREADY_ASSIGNED )
+            {
+                fprintf( stderr, "IP adress for interface lan%d was already configured.\n",
+                         opts.ifnum );
+                fprintf( stderr, "Release IP adress using /rel option first\n");
+            }
+            else
+            {
+                fprintf( stdout, "Configured IP address for interface lan%d successfully.\n",
+                         opts.ifnum );
+            }
+
+            daemon_if_sem_close( sem );
+
+            return 0;
+        }
+
+        // check return codes for no-wait mode
         switch( dm.msg )
         {
             case DCDE_NO_ERROR :
-                if( dm.wait )
-                    fprintf( stdout, "Configured IP address for interface lan%d successfully.\n",
-                             opts.ifnum );
-                else
-                    fprintf( stdout, "Configuring IP address for interface lan%d is progressing...\n",
-                             opts.ifnum );
+                fprintf( stdout, "Configuring IP address for interface lan%d is progressing...\n",
+                         opts.ifnum );
                 break;
 
             case DCDE_PIPE_ERROR :

@@ -61,8 +61,8 @@ struct if_info
     int    ifnum;
     TID    tid;
     int    iponly;
+    int    wait;
     int    ip_status;
-    int    wait_ip_assign;
     struct dhcp_packet dp;
     time_t start_time;
     time_t renewing_time;
@@ -70,6 +70,11 @@ struct if_info
     time_t expiration_time;
     int    state;
     int    quit;
+};
+
+struct if_sem
+{
+    HEV hev;
 };
 #pragma pack()
 
@@ -130,6 +135,7 @@ static void ip_assign( void *arg )
 {
     struct if_info    *info = ( struct if_info * )arg;
     struct ifconfig   *ifc;
+    struct if_sem     *sem;
     struct router     *r;
     struct in_addr     in_addr;
     int    init_state;
@@ -138,6 +144,9 @@ static void ip_assign( void *arg )
 
     info->state = DHCPC_STATE_INIT;
     log_msg("lan%d : %s state\n", info->ifnum, dhcpc_state_str[ info->state ]);
+
+    if( info->wait )
+        sem = daemon_if_sem_open( info->ifnum );
 
     r = router_init( info->ifnum );
 
@@ -289,6 +298,14 @@ static void ip_assign( void *arg )
             info->state = DHCPC_STATE_BOUND;
             log_msg("lan%d : %s state\n", info->ifnum,
                     dhcpc_state_str[ info->state ]);
+
+            if( info->wait && sem )
+            {
+                daemon_if_sem_post( sem );
+                daemon_if_sem_close( sem );
+
+                sem = NULL;
+            }
         }
 
         ifconfig_done( ifc );
@@ -384,13 +401,16 @@ int daemon_main( void )
                         break;
 
                     case IP_STATUS_ASSIGNED :
-                        if( info->wait_ip_assign )
+                        dm.msg = DCDE_IP_ALREADY_ASSIGNED;
+
+                        if( dm.wait )
                         {
-                            info->wait_ip_assign = 0;
-                            dm.msg = DCDE_NO_ERROR;
+                            struct if_sem *sem;
+
+                            sem = daemon_if_sem_open( dm.arg );
+                            daemon_if_sem_post( sem );
+                            daemon_if_sem_close( sem );
                         }
-                        else
-                            dm.msg = DCDE_IP_ALREADY_ASSIGNED;
                         break;
 
                     case IP_STATUS_RELEASING :
@@ -402,16 +422,12 @@ int daemon_main( void )
                         info->hmtx      = hmtx;
                         info->ifnum     = dm.arg;
                         info->iponly    = dm.iponly;
+                        info->wait      = dm.wait;
                         info->ds        = &ds;
                         info->tid       = _beginthread( ip_assign, NULL,
                                                         1024 * 1024, info );
 
                         dm.msg = DCDE_NO_ERROR;
-                        if( dm.wait && info->ip_status == IP_STATUS_ASSIGNING )
-                        {
-                            info->wait_ip_assign = 1;
-                            dm.msg = DCDE_IP_ASSIGNING;
-                        }
                         break;
                 }
                 break;
@@ -572,4 +588,56 @@ int daemon_alive( void )
 #endif
 }
 
+struct if_sem *daemon_if_sem_create( int ifnum )
+{
+    struct if_sem *sem;
+    char sem_name[ 128 ];
+
+    sprintf( sem_name, "%s%d", KIPCFG_SEM_NAME, ifnum );
+
+    sem = calloc( 1, sizeof( *sem ));
+    if( DosCreateEventSem( sem_name, &sem->hev, DC_SEM_SHARED, FALSE ))
+    {
+        free( sem );
+        sem = NULL;
+    }
+
+    return sem;
+}
+
+struct if_sem *daemon_if_sem_open( int ifnum )
+{
+    struct if_sem *sem;
+    char sem_name[ 128 ];
+
+    sprintf( sem_name, "%s%d", KIPCFG_SEM_NAME, ifnum );
+
+    sem = calloc( 1, sizeof( *sem ));
+    if( DosOpenEventSem( sem_name, &sem->hev ))
+    {
+        free( sem );
+        sem = NULL;
+    }
+
+    return sem;
+}
+
+void daemon_if_sem_close( struct if_sem *sem )
+{
+    DosCloseEventSem( sem->hev );
+    free( sem );
+}
+
+int daemon_if_sem_wait( struct if_sem *sem, int secs )
+{
+    if( DosWaitEventSem( sem->hev, secs * 1000 ))
+        return -1;
+
+    return 0;
+}
+
+void daemon_if_sem_post( struct if_sem *sem )
+{
+    DosPostEventSem( sem->hev );
+}
 
