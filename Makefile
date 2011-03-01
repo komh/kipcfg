@@ -60,7 +60,7 @@ bin : .SYMBOLIC kipcfg.exe readme.txt readme.eng
 
 src : .SYMBOLIC kipcfg.c dhcp.h daemon.c daemon.h dhcp_socks.c dhcp_socks.h &
       dhcpc.c dhcpc.h dhcp_options.c dhcp_options.h ifconfig.c ifconfig.h &
-      router.c router.h log.h Makefile COPYING
+      router.c router.h log.c log.h Makefile COPYING
 	-$(DEL) kipcfgsrc.zip
 	$(ZIP) kipcfgsrc $<
 
