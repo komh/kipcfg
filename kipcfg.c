@@ -23,7 +23,7 @@
 
 #include "daemon.h"
 
-#define KIPCFG_VER  "v0.1.0"
+#define KIPCFG_VER  "v0.1.1"
 
 #define MODE_REQUEST    1
 #define MODE_RELEASE    2
