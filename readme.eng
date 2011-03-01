@@ -1,4 +1,4 @@
-                                kipcfg v0.1.0
+                                kipcfg v0.1.1
                                ---------------
                             
 1. Introduction
@@ -42,16 +42,18 @@ server.
 7.1. How to execute
 -------------------
 
-    kipcfg /req if | /rel if | /iponly | /wait | /q
+    kipcfg /req if | /rel if | /iponly | /wait secs | /q
 
 7.2. Options
 ------------
     if          interface name such as lan0
+    secs        maximum wait time, from 1 second to 60 seconds
+    
     /req        request IP address for the specefied interface
     /rel        release IP address for the specified interface
     /iponly     set IP address only for the specified interface
                 ( When you don't want to set a default gateway and DNS server )
-    /wait       wait for the IP address to be assigned
+    /wait       wait for the IP address to be assigned during a specified time
     /q          quit kipcfg daemon
   
 8. Limits/Known bugs
@@ -75,7 +77,12 @@ server.
 10. History
 ---------------
 
-  - test version ( 2011/02/23 )
+  - v0.1.1 ( 2011/03/01 )
+    .Reduced a reply-wait-time from 11 seconds to 5 seconds
+    ./wait option accepts a maximum wait time as a parameter
+    .log a message-generated time
+
+  - v0.1.0 ( 2011/02/23 )
     .initial release
     
 11. Compilation
