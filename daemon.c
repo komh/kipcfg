@@ -346,6 +346,8 @@ int daemon_main( void )
     HEV    hev = NULLHANDLE;
     int    quit = 0;
 
+    log_msg("----- kipcfg daemon started -----\n");
+
     DosCreateNPipe( KIPCFG_PIPE_NAME, &hpipe, NP_ACCESS_DUPLEX,
                     NP_TYPE_MESSAGE | NP_READMODE_MESSAGE | 1, 1024, 1024, 0 );
 
