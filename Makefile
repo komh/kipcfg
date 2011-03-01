@@ -27,7 +27,7 @@ DEL = del
 all : .SYMBOLIC kipcfg.exe
 
 kipcfg.exe : kipcfg.obj daemon.obj dhcp_socks.obj dhcpc.obj dhcp_options.obj &
-             ifconfig.obj router.obj
+             ifconfig.obj router.obj log.obj
 	$(LINK) $(LFLAGS) system os2v2 name $@ file { $< }
 
 kipcfg.obj : kipcfg.c daemon.h
@@ -44,6 +44,8 @@ dhcp_options.o: dhcp_options.c dhcp.h log.h dhcp_options.h
 ifconfig.obj : ifconfig.c router.h log.h ifconfig.h
 
 router.obj : router.c log.h router.h
+
+log.obj : log.c log.h
 
 dist : .SYMBOLIC
 	$(MAKE) clean

@@ -16,10 +16,35 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef KIPCFG_LOG_H
-#define KIPCFG_LOG_H
+#include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
 
-void log_msg( const char *format, ... );
+#include "log.h"
 
-#endif
+void log_msg( const char *format, ... )
+{
+    FILE   *fp;
+    time_t  t;
+    struct  tm tm;
+    va_list arg;
+
+    fp = fopen("kipcfg.log", "at");
+
+    time( &t );
+
+    tm = *localtime( &t );
+
+    fprintf( fp, "%04d-%02d-%02d %02d:%02d:%02d ",
+             tm.tm_year + 1900, tm.tm_mon, tm.tm_mday,
+             tm.tm_hour, tm.tm_min, tm.tm_sec );
+
+    va_start( arg, format );
+
+    vfprintf( fp, format, arg );
+
+    va_end( arg );
+
+    fclose( fp );
+}
 
