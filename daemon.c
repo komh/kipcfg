@@ -103,7 +103,7 @@ static int is_valid_interface( int ifnum, struct dhcp_socks *ds )
 }
 
 static int replace_resolv2( const char *domain, int count,
-                           struct in_addr *list )
+                            struct in_addr *list )
 {
     const char *env_etc = getenv("ETC");
     char resolv2_path[ CCHMAXPATH ];
