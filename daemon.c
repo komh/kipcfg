@@ -27,8 +27,11 @@
 #include <process.h>
 
 #include <types.h>
+#include <sys/socket.h> // struct sockaddr
 #include <netinet/in.h> // struct in_addr
 #include <arpa/inet.h>  // inet_ntoa
+#include <sys/ioctl.h>  // ioctl()
+#include <net/if.h>     // struct ifreq
 
 #include "dhcp.h"
 #include "dhcpc.h"
@@ -89,9 +92,14 @@ static const char *dhcpc_state_str[] = {
     "BOUND",
 };
 
-static int is_valid_interface( int ifnum )
+static int is_valid_interface( int ifnum, struct dhcp_socks *ds )
 {
-    return ( ifnum >=0 && ifnum < 8 );
+    struct ifreq ifr;
+
+    strcpy( ifr.ifr_name, "lan0");
+    ifr.ifr_name[ 3 ] += ifnum;
+
+    return ioctl( ds->client, SIOCGIFVALID, &ifr ) == 0;
 }
 
 static int replace_resolv2( const char *domain, int count,
@@ -391,7 +399,7 @@ int daemon_main( void )
             {
                 struct if_info *info = &if_info_table[ dm.arg ];
 
-                if( !is_valid_interface( dm.arg ))
+                if( !is_valid_interface( dm.arg, &ds ))
                 {
                     dm.msg = DCDE_INVALID_INTERFACE;
                     break;
@@ -438,7 +446,7 @@ int daemon_main( void )
 
             case DCDM_RELEASE :
             {
-                if( !is_valid_interface( dm.arg ))
+                if( !is_valid_interface( dm.arg, &ds ))
                     dm.msg = DCDE_INVALID_INTERFACE;
                 else
                 {
