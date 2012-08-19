@@ -28,19 +28,17 @@
 
 #include "dhcp_options.h"
 
-struct dhcp_options *dhcp_options_parse( struct dhcp_packet *dp )
+bool DHCPOptionParser::Parse( struct dhcp_packet *dp )
 {
-    struct dhcp_options *dopts;
-
     int code;
     int len;
     unsigned char *data;
     int i, j;
 
     if( memcmp( dp->options, DHCP_OPTIONS_COOKIE, 4 ))
-        return NULL;
+        return false;
 
-    dopts = calloc( 1, sizeof( *dopts ));
+    Free();
 
     for( i = 4; ( code = dp->options[ i++ ]) != DHO_END; )
     {
@@ -53,62 +51,63 @@ struct dhcp_options *dhcp_options_parse( struct dhcp_packet *dp )
         switch( code )
         {
             case DHO_DHCP_MESSAGE_TYPE :
-                dopts->msg_type = *data;
+                mMsgType = *data;
                 break;
 
             case DHO_DHCP_SERVER_IDENTIFIER :
-                dopts->sid = *( struct in_addr * )data;
+                mSID = *reinterpret_cast< struct in_addr * >( data );
                 break;
 
             case DHO_DHCP_LEASE_TIME :
-                dopts->lease_time = *( u_int32_t * )data;
+                mLeaseTime = *reinterpret_cast< u_int32_t * >( data );
                 break;
 
             case DHO_SUBNET_MASK :
-                dopts->subnet_mask = *( struct in_addr * )data;
+                mSubnetMask = *reinterpret_cast< struct in_addr * >( data );
                 break;
 
             case DHO_ROUTERS :
             {
-                dopts->router_count = len / 4;
-                dopts->router_list = malloc( sizeof( struct in_addr ) *
-                                             dopts->router_count );
+                mRouterCount = static_cast< u_int8_t >( len / 4 );
+                mRouterList  = new struct in_addr[ mRouterCount ];
                 for( j = 0; j < len; j += 4 )
-                    dopts->router_list[ j / 4 ] = *( struct in_addr *)&data[ j ];
+                    mRouterList[ j / 4 ] = *reinterpret_cast
+                                                < struct in_addr *>
+                                                    ( &data[ j ]);
                 break;
             }
 
             case DHO_DOMAIN_NAME_SERVERS :
             {
-                dopts->dns_count = len / 4;
-                dopts->dns_list = malloc( sizeof( struct in_addr ) *
-                                          dopts->dns_count );
+                mDNSCount = static_cast< u_int8_t >( len / 4 );
+                mDNSList  = new struct in_addr[ mDNSCount ];
                 for( j = 0; j < len; j += 4 )
-                    dopts->dns_list[ j / 4 ] = *( struct in_addr *)&data[ j ];
+                    mDNSList[ j / 4 ] = *reinterpret_cast
+                                            < struct in_addr *>( &data[ j ]);
                 break;
             }
 
             case DHO_DOMAIN_NAME :
-                dopts->domain_name = calloc( 1, len + 1 );
-                memcpy( dopts->domain_name, data, len );
+                mDomainName = new char[ len + 1 ]();
+                memcpy( mDomainName, data, len );
                 break;
         }
 
         i += len;
     }
 
-    return dopts;
+    return true;
 }
 
-void dhcp_options_free( struct dhcp_options *dopts )
-{
-    if( dopts )
-    {
-        free( dopts->router_list );
-        free( dopts->dns_list );
-        free( dopts->domain_name );
-    }
 
-    free( dopts );
+void DHCPOptionParser::Free()
+{
+    delete[] mRouterList;
+    delete[] mDNSList;
+    delete[] mDomainName;
+
+    mRouterList = NULL;
+    mDNSList    = NULL;
+    mDomainName = NULL;
 }
 

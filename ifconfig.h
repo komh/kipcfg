@@ -21,6 +21,8 @@
 
 #include <types.h>
 
+#include "router.h"
+
 #define IFNUM_LOOPBACK 9
 
 #ifndef INADDR_LOOPBACK
@@ -29,11 +31,18 @@
 
 #define NETMASK_HOST 0xFFFFFFFF
 
-struct ifconfig;
+class IFConfig
+{
+public :
+    IFConfig( int ifnum, int assign_priv_ip );
+    ~IFConfig();
 
-struct ifconfig *ifconfig_init( int ifnum, int broadcast );
-void   ifconfig_done( struct ifconfig *ifc );
-int    ifconfig_get( struct ifconfig *ifc, u_long *addr, u_long *netmask );
-int    ifconfig_set( struct ifconfig *ifc, u_long addr, u_long netmask );
+    int Get( u_long *addr, u_long *netmask );
+    int Set( u_long addr, u_long netmask );
 
+private :
+    int     mIFNum;
+    int     mS;
+    Router  mR;
+};
 #endif

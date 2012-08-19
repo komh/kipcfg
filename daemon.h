@@ -19,6 +19,8 @@
 #ifndef KIPCFG_DAEMON_H
 #define KIPCFG_DAEMON_H
 
+#include <os2.h>
+
 #define DHCPC_DAEMON_MAGIC  "I'm_daemon"
 
 #define DCDM_CHECK_ALIVE 1
@@ -55,18 +57,29 @@ struct daemon_msg
 };
 #pragma pack()
 
-struct if_sem;
+class Daemon
+{
+public :
+    int  Main();
+    void Start( const char *kipcfg_exe );
+    int  Call( struct daemon_msg *dm );
+    bool Alive();
+};
 
-int  daemon_main( void );
-void daemon_start( const char *kipcfg_exe );
-int  daemon_call( struct daemon_msg *dm );
-int  daemon_alive( void );
+class DaemonIFSem
+{
+public :
+    bool mInitSuccess;
 
-struct if_sem *daemon_if_sem_create( int ifnum );
-struct if_sem *daemon_if_sem_open( int ifnum );
-void   daemon_if_sem_close( struct if_sem *sem );
-int    daemon_if_sem_wait( struct if_sem *sem, int secs );
-void   daemon_if_sem_post( struct if_sem *sem );
+    DaemonIFSem( int ifnum, bool create = true );
+    ~DaemonIFSem();
 
+    int  Wait( int secs );
+    void Post();
+
+private :
+    int mIFNum;
+    HEV mHEV;
+};
 #endif
 

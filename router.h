@@ -25,13 +25,18 @@
 #define ROUTER_DELETE_ONE   0
 #define ROUTER_DELETE_ALL   1
 
-struct router;
+class Router
+{
+public :
+    Router( int ifnum );
+    ~Router();
 
-struct router *router_init( int ifnum );
-void router_done( struct router *r );
-int router_add( struct router *r, u_long d, u_long g );
-int router_delete_ip( struct router *r, u_long d, u_long g, int flag );
-int router_delete_if( struct router *r, int ifnum );
+    int Add( u_long d, u_long g );
+    int DeleteIP( u_long d, u_long g, int flag );
+    int DeleteIF( int ifnum );
 
+private :
+    int mS;
+};
 #endif
 

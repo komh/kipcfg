@@ -22,16 +22,20 @@
 #define SERVER_PORT 67
 #define CLIENT_PORT 68
 
-#pragma pack( 1 )
-struct dhcp_socks
+class DHCPSocks
 {
-    int server;
-    int client;
+public :
+    bool mInitSuccess;
+
+    DHCPSocks();
+    ~DHCPSocks();
+
+    int GetServer() const { return mServer; };
+    int GetClient() const { return mClient; };
+
+private :
+    int mServer;
+    int mClient;
 };
-#pragma pack()
-
-int  dhcp_socks_init( struct dhcp_socks *ds );
-void dhcp_socks_done( struct dhcp_socks *ds );
-
 #endif
 

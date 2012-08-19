@@ -33,15 +33,6 @@
 
 #include "ifconfig.h"
 
-#pragma pack( 1 )
-struct ifconfig
-{
-    int     ifnum;
-    int     s;
-    struct  router *r;
-};
-#pragma pack()
-
 static const char *if_names[] = {"lan0", "lan1", "lan2", "lan3", "lan4",
                                  "lan5", "lan6", "lan7", "lan8", "lo", };
 
@@ -72,18 +63,12 @@ static int call_ifconfig( int ifnum, const char *addr, const char *netmask )
     return spawnvp( P_WAIT, "ifconfig.exe", argv );
 }
 
-struct ifconfig *ifconfig_init( int ifnum, int assign_priv_ip )
+IFConfig::IFConfig( int ifnum, int assign_priv_ip ) : mR( ifnum )
 {
-    struct ifconfig *ifc;
-    struct router   *r;
     int    s;
     char   if_ip[ IFNAMSIZ ];
 
-    ifc = calloc( 1, sizeof( *ifc ));
-
     s = socket( PF_INET, SOCK_RAW, 0 );
-
-    r = router_init( ifnum );
 
     if( assign_priv_ip )
     {
@@ -92,7 +77,8 @@ struct ifconfig *ifconfig_init( int ifnum, int assign_priv_ip )
         strcpy( ifreq.ifr_name, if_names[ ifnum ]);
         // IP address not assigned ?
         if( ioctl( s, SIOCGIFADDR, &ifreq ) < 0 ||
-            !(( struct sockaddr_in * )&ifreq.ifr_addr )->sin_addr.s_addr )
+            !reinterpret_cast< struct sockaddr_in * >
+                ( &ifreq.ifr_addr )->sin_addr.s_addr )
         {
             log_msg("%s : Assign a private IP address\n", if_names[ ifnum ]);
 
@@ -101,49 +87,48 @@ struct ifconfig *ifconfig_init( int ifnum, int assign_priv_ip )
         }
     }
 
-    ifc->ifnum = ifnum;
-    ifc->s     = s;
-    ifc->r     = r;
-
-    return ifc;
+    mIFNum = ifnum;
+    mS     = s;
 }
 
-void ifconfig_done( struct ifconfig *ifc )
+IFConfig::~IFConfig()
 {
-    router_done( ifc->r );
-
-    soclose( ifc->s );
-
-    free( ifc );
+    soclose( mS );
 }
 
-int ifconfig_get( struct ifconfig *ifc, u_long *addr, u_long *netmask )
+int IFConfig::Get( u_long *addr, u_long *netmask )
 {
     struct ifreq ifreq;
 
     if( addr )
     {
-        strcpy( ifreq.ifr_name, if_names[ ifc->ifnum ]);
-        if( ioctl( ifc->s, SIOCGIFADDR, &ifreq ) < 0 )
+        strcpy( ifreq.ifr_name, if_names[ mIFNum ]);
+        if( ioctl( mS, SIOCGIFADDR, &ifreq ) < 0 )
             return -1;
 
-        *addr = (( struct sockaddr_in * )&ifreq.ifr_addr )->sin_addr.s_addr;
+        *addr = reinterpret_cast< struct sockaddr_in * >
+                    ( &ifreq.ifr_addr )->sin_addr.s_addr;
     }
 
     // TODO : get netmask
 
+    // to prevent an unused warning
+    (void)netmask;
+
     return 0;
 }
 
-int ifconfig_set( struct ifconfig *ifc, u_long addr, u_long netmask )
+int IFConfig::Set( u_long addr, u_long netmask )
 {
     char addr_name[ IFNAMSIZ ];
     char mask_name[ IFNAMSIZ ];
 
-    strcpy( addr_name, inet_ntoa( *( struct in_addr * )&addr ));
-    strcpy( mask_name, inet_ntoa( *( struct in_addr * )&netmask ));
+    strcpy( addr_name, inet_ntoa( *reinterpret_cast< struct in_addr * >
+                                        ( &addr )));
+    strcpy( mask_name, inet_ntoa( *reinterpret_cast< struct in_addr * >
+                                        ( &netmask )));
 
-    return call_ifconfig( ifc->ifnum, addr_name, mask_name );
+    return call_ifconfig( mIFNum, addr_name, mask_name );
 }
 
 

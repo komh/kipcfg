@@ -61,7 +61,7 @@
 struct if_info
 {
     HMTX   hmtx;
-    struct dhcp_socks *ds;
+    DHCPClient *dhcpc;
     int    ifnum;
     TID    tid;
     int    iponly;
@@ -75,11 +75,6 @@ struct if_info
     int    state;
     int    quit;
 };
-
-struct if_sem
-{
-    HEV hev;
-};
 #pragma pack()
 
 static const char *dhcpc_state_str[] = {
@@ -92,18 +87,18 @@ static const char *dhcpc_state_str[] = {
     "BOUND",
 };
 
-static int is_valid_interface( int ifnum, struct dhcp_socks *ds )
+static int is_valid_interface( int ifnum, const DHCPSocks& ds )
 {
     struct ifreq ifr;
 
     strcpy( ifr.ifr_name, "lan0");
-    ifr.ifr_name[ 3 ] += ifnum;
+    ifr.ifr_name[ 3 ] += static_cast< char >( ifnum );
 
-    return ioctl( ds->client, SIOCGIFVALID, &ifr ) == 0;
+    return ioctl( ds.GetClient(), SIOCGIFVALID, &ifr ) == 0;
 }
 
 static int replace_resolv2( const char *domain, int count,
-                            struct in_addr *list )
+                            const struct in_addr *list )
 {
     const char *env_etc = getenv("ETC");
     char resolv2_path[ CCHMAXPATH ];
@@ -142,11 +137,9 @@ static int replace_resolv2( const char *domain, int count,
 
 static void ip_assign( void *arg )
 {
-    struct if_info    *info = ( struct if_info * )arg;
-    struct ifconfig   *ifc;
-    struct if_sem     *sem;
-    struct router     *r;
-    struct in_addr     in_addr;
+    struct if_info *info = reinterpret_cast< struct if_info * >( arg );
+    DaemonIFSem    *sem;
+    struct in_addr in_addr;
     int    init_state;
     int    use_broadcast;
     time_t next_time;
@@ -155,9 +148,16 @@ static void ip_assign( void *arg )
     log_msg("lan%d : %s state\n", info->ifnum, dhcpc_state_str[ info->state ]);
 
     if( info->wait )
-        sem = daemon_if_sem_open( info->ifnum );
+    {
+        sem = new DaemonIFSem( info->ifnum, false );
+        if( !sem->mInitSuccess )
+        {
+            delete sem;
+            sem = NULL;
+        }
+    }
 
-    r = router_init( info->ifnum );
+    Router r( info->ifnum );
 
     do
     {
@@ -228,64 +228,63 @@ static void ip_assign( void *arg )
             break;
         }
 
-        ifc = ifconfig_init( info->ifnum, init_state );
+        IFConfig ifc( info->ifnum, init_state );
 
         use_broadcast = info->state == DHCPC_STATE_INIT ||
                         info->state == DHCPC_STATE_REBINDING;
 
         if( use_broadcast )
         {
-            router_delete_ip( r, htonl( ROUTER_BROADCAST ), 0,
-                              ROUTER_DELETE_ALL );
+            r.DeleteIP( htonl( ROUTER_BROADCAST ), 0, ROUTER_DELETE_ALL );
 
-            ifconfig_get( ifc, &in_addr.s_addr, NULL );
-            router_add( r, htonl( ROUTER_BROADCAST ), in_addr.s_addr );
+            ifc.Get( &in_addr.s_addr, NULL );
+            r.Add( htonl( ROUTER_BROADCAST ), in_addr.s_addr );
         }
 
-        if(( !init_state ||
-             dhcpc_discover( info->ifnum, info->ds, &info->dp ) == 0 ) &&
-            dhcpc_request( info->ifnum, info->ds, &info->dp, info->state ) == 0 )
+        if(( !init_state || info->dhcpc->Discover( &info->dp ) == 0 ) &&
+           info->dhcpc->Request( &info->dp, info->state ) == 0 )
         {
-            struct    dhcp_options *dopts;
+            DHCPOptionParser dopts;
             int       i;
 
-            dopts = dhcp_options_parse( &info->dp );
+            dopts.Parse( &info->dp );
 
             log_msg("lan%d : IP configurations\n", info->ifnum );
             log_msg("\tIP address = %s\n", inet_ntoa( info->dp.yiaddr ));
-            log_msg("\tSubnet mask = %s\n", inet_ntoa( dopts->subnet_mask ));
-            log_msg("\tLease times = %lu seconds\n", dopts->lease_time );
+            log_msg("\tSubnet mask = %s\n",
+                    inet_ntoa( dopts.GetSubnetMask()));
+            log_msg("\tLease times = %lu seconds\n", dopts.GetLeaseTime());
             if( !info->iponly )
             {
                 log_msg("\tRouters\n");
-                for( i = 0; i < dopts->router_count; i++ )
+                for( i = 0; i < dopts.GetRouterCount(); i++ )
                     log_msg("\t\tno. %d = %s\n", i + 1,
-                            inet_ntoa( dopts->router_list[ i ]));
+                            inet_ntoa( dopts.GetRouterList()[ i ]));
                 log_msg("\tDNS servers\n");
-                for( i = 0; i < dopts->dns_count; i++ )
+                for( i = 0; i < dopts.GetDNSCount(); i++ )
                     log_msg("\t\tno. %d = %s\n", i + 1,
-                            inet_ntoa( dopts->dns_list[ i ]));
-                log_msg("\tDomain name = %s\n", dopts->domain_name );
+                            inet_ntoa( dopts.GetDNSList()[ i ]));
+                log_msg("\tDomain name = %s\n", dopts.GetDomainName());
             }
-            log_msg("\tDHCP server = %s\n", inet_ntoa( dopts->sid ));
+            log_msg("\tDHCP server = %s\n", inet_ntoa( dopts.GetSID()));
 
             if( use_broadcast )
-                router_delete_ip( r, htonl( ROUTER_BROADCAST ), 0,
-                                  ROUTER_DELETE_ALL );
+                r.DeleteIP( htonl( ROUTER_BROADCAST ), 0, ROUTER_DELETE_ALL );
 
             if( init_state )
             {
-                ifconfig_set( ifc, info->dp.yiaddr.s_addr,
-                              dopts->subnet_mask.s_addr );
+                ifc.Set( info->dp.yiaddr.s_addr,
+                         dopts.GetSubnetMask().s_addr );
 
                 if( !info->iponly )
                 {
-                    for( i = 0; i < dopts->router_count; i++ )
-                        router_add( r, htonl( ROUTER_DEFAULT ),
-                                    dopts->router_list[ i ].s_addr );
+                    for( i = 0; i < dopts.GetRouterCount(); i++ )
+                        r.Add( htonl( ROUTER_DEFAULT ),
+                               dopts.GetRouterList()[ i ].s_addr );
 
-                    replace_resolv2( dopts->domain_name, dopts->dns_count,
-                                     dopts->dns_list );
+                    replace_resolv2( dopts.GetDomainName(),
+                                     dopts.GetDNSCount(),
+                                     dopts.GetDNSList());
                 }
             }
 
@@ -294,13 +293,11 @@ static void ip_assign( void *arg )
             info->rebinding_time  =
             info->expiration_time = time( NULL );
 
-            info->renewing_time   += dopts->lease_time / 2;
-            info->rebinding_time  += dopts->lease_time * 7 / 8;
-            info->expiration_time += dopts->lease_time;
+            info->renewing_time   += dopts.GetLeaseTime() / 2;
+            info->rebinding_time  += dopts.GetLeaseTime() * 7 / 8;
+            info->expiration_time += dopts.GetLeaseTime();
 
             next_time = info->renewing_time;
-
-            dhcp_options_free( dopts );
 
             info->ip_status = IP_STATUS_ASSIGNED;
 
@@ -310,44 +307,37 @@ static void ip_assign( void *arg )
 
             if( info->wait && sem )
             {
-                daemon_if_sem_post( sem );
-                daemon_if_sem_close( sem );
+                sem->Post();
 
+                delete sem;
                 sem = NULL;
             }
         }
 
-        ifconfig_done( ifc );
-
         DosReleaseMutexSem( info->hmtx );
     } while( !info->quit );
-
-    router_done( r );
 }
 
 static void ip_release( struct if_info *info )
 {
-    struct ifconfig *ifc;
-
     info->ip_status = IP_STATUS_RELEASING;
 
-    dhcpc_release( info->ifnum, info->ds, &info->dp );
+    info->dhcpc->Release( &info->dp );
+    delete info->dhcpc;
 
     info->quit = 1;
     DosWaitThread( &info->tid, DCWW_WAIT );
 
-    ifc = ifconfig_init( info->ifnum, 0 );
-    ifconfig_set( ifc, htonl( INADDR_ANY ), htonl( NETMASK_HOST ));
-    ifconfig_done( ifc );
+    IFConfig ifc( info->ifnum, 0 );
+    ifc.Set( htonl( INADDR_ANY ), htonl( NETMASK_HOST ));
 
     // set all to 0, as a result, ip_status becomes IP_STATUS_NOT_ASSIGNED
     memset( info, 0, sizeof( *info ));
 }
 
-int daemon_main( void )
+int Daemon::Main()
 {
     struct if_info if_info_table[ IF_INFO_ENTRIES ];
-    struct dhcp_socks ds;
     HMTX   hmtx;
     HPIPE  hpipe;
     struct daemon_msg dm;
@@ -367,11 +357,10 @@ int daemon_main( void )
     DosPostEventSem( hev );
     DosCloseEventSem( hev );
 
-    if( dhcp_socks_init( &ds ) < 0 )
+    DHCPSocks ds;
+    if( !ds.mInitSuccess )
     {
-        log_msg("dhcp_socks_init() failed!!!\n");
-
-        dhcp_socks_done( &ds );
+        log_msg("DHCPSocks() failed!!!\n");
 
         DosCloseMutexSem( hmtx );
 
@@ -399,7 +388,7 @@ int daemon_main( void )
             {
                 struct if_info *info = &if_info_table[ dm.arg ];
 
-                if( !is_valid_interface( dm.arg, &ds ))
+                if( !is_valid_interface( dm.arg, ds ))
                 {
                     dm.msg = DCDE_INVALID_INTERFACE;
                     break;
@@ -416,11 +405,8 @@ int daemon_main( void )
 
                         if( dm.wait )
                         {
-                            struct if_sem *sem;
-
-                            sem = daemon_if_sem_open( dm.arg );
-                            daemon_if_sem_post( sem );
-                            daemon_if_sem_close( sem );
+                            DaemonIFSem sem( dm.arg, false );
+                            sem.Post();
                         }
                         break;
 
@@ -434,7 +420,7 @@ int daemon_main( void )
                         info->ifnum     = dm.arg;
                         info->iponly    = dm.iponly;
                         info->wait      = dm.wait;
-                        info->ds        = &ds;
+                        info->dhcpc     = new DHCPClient( info->ifnum, ds );
                         info->tid       = _beginthread( ip_assign, NULL,
                                                         1024 * 1024, info );
 
@@ -446,7 +432,7 @@ int daemon_main( void )
 
             case DCDM_RELEASE :
             {
-                if( !is_valid_interface( dm.arg, &ds ))
+                if( !is_valid_interface( dm.arg, ds ))
                     dm.msg = DCDE_INVALID_INTERFACE;
                 else
                 {
@@ -513,8 +499,6 @@ int daemon_main( void )
         DosDisConnectNPipe( hpipe );
     } while( !quit );
 
-    dhcp_socks_done( &ds );
-
     DosCloseMutexSem( hmtx );
 
     DosClose( hpipe );
@@ -522,7 +506,7 @@ int daemon_main( void )
     return 0;
 }
 
-void daemon_start( const char *kipcfg_exe )
+void Daemon::Start( const char *kipcfg_exe )
 {
     HEV         hev;
     CHAR        szFailureName[ CCHMAXPATH ];
@@ -539,7 +523,7 @@ void daemon_start( const char *kipcfg_exe )
     DosCloseEventSem( hev );
 }
 
-int daemon_call( struct daemon_msg *dm )
+int Daemon::Call( struct daemon_msg *dm )
 {
     HPIPE hpipe;
     ULONG ulAction;
@@ -581,7 +565,7 @@ int daemon_call( struct daemon_msg *dm )
     return 0;
 }
 
-int daemon_alive( void )
+bool Daemon::Alive()
 {
 #if 0
     struct daemon_msg dm;
@@ -599,56 +583,36 @@ int daemon_alive( void )
 #endif
 }
 
-struct if_sem *daemon_if_sem_create( int ifnum )
+DaemonIFSem::DaemonIFSem( int ifnum, bool create )
 {
-    struct if_sem *sem;
     char sem_name[ 128 ];
+    ULONG rc;
 
     sprintf( sem_name, "%s%d", KIPCFG_SEM_NAME, ifnum );
 
-    sem = calloc( 1, sizeof( *sem ));
-    if( DosCreateEventSem( sem_name, &sem->hev, DC_SEM_SHARED, FALSE ))
-    {
-        free( sem );
-        sem = NULL;
-    }
+    if( create )
+      rc = DosCreateEventSem( sem_name, &mHEV, DC_SEM_SHARED, FALSE );
+    else
+      rc = DosOpenEventSem( sem_name, &mHEV );
 
-    return sem;
+    mInitSuccess = !rc;
 }
 
-struct if_sem *daemon_if_sem_open( int ifnum )
+DaemonIFSem::~DaemonIFSem()
 {
-    struct if_sem *sem;
-    char sem_name[ 128 ];
-
-    sprintf( sem_name, "%s%d", KIPCFG_SEM_NAME, ifnum );
-
-    sem = calloc( 1, sizeof( *sem ));
-    if( DosOpenEventSem( sem_name, &sem->hev ))
-    {
-        free( sem );
-        sem = NULL;
-    }
-
-    return sem;
+    DosCloseEventSem( mHEV );
 }
 
-void daemon_if_sem_close( struct if_sem *sem )
+int DaemonIFSem::Wait( int secs )
 {
-    DosCloseEventSem( sem->hev );
-    free( sem );
-}
-
-int daemon_if_sem_wait( struct if_sem *sem, int secs )
-{
-    if( DosWaitEventSem( sem->hev, secs * 1000 ))
+    if( DosWaitEventSem( mHEV, secs * 1000 ))
         return -1;
 
     return 0;
 }
 
-void daemon_if_sem_post( struct if_sem *sem )
+void DaemonIFSem::Post()
 {
-    DosPostEventSem( sem->hev );
+    DosPostEventSem( mHEV );
 }
 

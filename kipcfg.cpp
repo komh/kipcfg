@@ -28,16 +28,23 @@
 #define MODE_REQUEST    1
 #define MODE_RELEASE    2
 
-struct options
+class KIPCFG
 {
-    int mode;
-    int ifnum;
-    int iponly;
-    int wait;
-    int quit;
+public :
+    int Run( int argc, const char *argv[]);
+
+private :
+    int  mMode;
+    int  mIFNum;
+    bool mIPOnly;
+    int  mWait;
+    bool mQuit;
+
+    void ShowUsage();
+    bool ParseOptions( int argc, const char *argv[]);
 };
 
-static void show_usage( void )
+void KIPCFG::ShowUsage()
 {
     fprintf( stderr, "\n");
     fprintf( stderr, "Usage: kipcfg /req interface | /rel interface | /iponly | /wait secs | /q\n");
@@ -51,17 +58,18 @@ static void show_usage( void )
     fprintf( stderr, "\n");
 }
 
-static void parse_options( int argc, char *argv[], struct options *opts )
+bool KIPCFG::ParseOptions( int argc, const char *argv[])
 {
     int need_ifname;
     int need_secs;
     int invalid;
     int i;
 
-    if( !opts )
-        exit( 1 );
-
-    memset( opts, 0, sizeof( *opts ));
+    mMode   = 0;
+    mIFNum  = 0;
+    mIPOnly = false;;
+    mWait   = 0;
+    mQuit   = false;
 
     need_ifname = 0;
     need_secs   = 0;
@@ -73,7 +81,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         {
             if( !strncmp( argv[ i ], "lan", 3 ) && strlen( argv[ i ]) == 4 )
             {
-                opts->ifnum = atoi( argv[ i ] + 3 );
+                mIFNum = atoi( argv[ i ] + 3 );
             }
             else
                 invalid = 1;
@@ -92,7 +100,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
                 if( secs > 60 )
                     secs = 60;
 
-                opts->wait = secs;
+                mWait = secs;
             }
             else
                 invalid = 1;
@@ -101,19 +109,19 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         }
         else if( !stricmp( argv[ i ], "/req") || !stricmp( argv[ i ], "-req"))
         {
-            opts->mode = MODE_REQUEST;
+            mMode = MODE_REQUEST;
 
             need_ifname = 1;
         }
         else if( !stricmp( argv[ i ], "/rel") || !stricmp( argv[ i ], "-rel"))
         {
-            opts->mode = MODE_RELEASE;
+            mMode = MODE_RELEASE;
 
             need_ifname = 1;
         }
         else if( !stricmp( argv[ i ], "/iponly") || !stricmp( argv[ i ], "/iponly"))
         {
-            opts->iponly = 1;
+            mIPOnly = true;
         }
         else if( !stricmp( argv[ i ], "/wait") || !stricmp( argv[ i ], "-wait"))
         {
@@ -121,7 +129,7 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         }
         else if( !stricmp( argv[ i ], "/q") || !stricmp( argv[ i ], "-q"))
         {
-            opts->quit = 1;
+            mQuit = true;
         }
         else
             invalid = 1;
@@ -129,57 +137,60 @@ static void parse_options( int argc, char *argv[], struct options *opts )
         if( i + 1 == argc && need_ifname )
         {
             fprintf( stderr, "Missing interface!!!\n" );
-            show_usage();
+            ShowUsage();
 
-            exit( 1 );
+            return false;
         }
 
         if( i + 1 == argc && need_secs )
         {
             fprintf( stderr, "Missing maximum wait time!!!\n");
-            show_usage();
+            ShowUsage();
 
-            exit( 1 );
+            return false;
         }
 
         if( invalid )
         {
             fprintf( stderr, "Invalid argument : %s\n", argv[ i ]);
-            show_usage();
+            ShowUsage();
 
-            exit( 1 );
+            return false;
         }
     }
+
+    return true;
 }
 
-int main( int argc, char *argv[])
+int KIPCFG::Run( int argc, const char *argv[])
 {
-    struct options    opts;
+    Daemon daemon;
     struct daemon_msg dm;
 
     if( argc == 2 && !strcmp( argv[ 1 ], DHCPC_DAEMON_MAGIC ))
-        return daemon_main();
+        return daemon.Main();
 
-    if( !daemon_alive())
-        daemon_start( argv[ 0 ]);
+    if( !daemon.Alive())
+        daemon.Start( argv[ 0 ]);
 
     fprintf( stdout, "kipcfg %s - Very Simple DHCP Client\n", KIPCFG_VER );
 
     if( argc < 2 )
     {
-        show_usage();
+        ShowUsage();
 
         return 1;
     }
 
-    parse_options( argc, argv, &opts );
+    if( !ParseOptions( argc, argv ))
+        return 1;
 
-    if( opts.quit )
+    if( mQuit )
     {
         fprintf( stdout, "Please wait to quit daemon...\n");
         dm.msg  = DCDM_QUIT;
-        dm.wait = opts.wait;
-        daemon_call( &dm );
+        dm.wait = mWait;
+        daemon.Call( &dm );
         if( dm.msg == DCDE_NO_ERROR )
             fprintf( stdout, "Terminated daemon successfully.\n");
         else
@@ -188,53 +199,53 @@ int main( int argc, char *argv[])
         return 0;
     }
 
-    if( opts.mode == MODE_REQUEST )
+    if( mMode == MODE_REQUEST )
     {
-        struct if_sem *sem;
+        DaemonIFSem *sem;
 
-        if( opts.wait )
+        if( mWait )
         {
-            sem = daemon_if_sem_open( opts.ifnum );
-            if( sem )
+            sem = new DaemonIFSem( mIFNum, false );
+            if( sem->mInitSuccess )
             {
                 fprintf( stderr, "Configuring IP address for interface lan%d is still progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Please wait to finish it\n");
 
-                daemon_if_sem_close( sem );
+                delete sem;
 
                 return 0;
             }
 
-            sem = daemon_if_sem_create( opts.ifnum );
+            sem = new DaemonIFSem( mIFNum );
         }
 
         dm.msg    = DCDM_REQUEST;
-        dm.arg    = opts.ifnum;
-        dm.iponly = opts.iponly;
-        dm.wait   = opts.wait;
-        daemon_call( &dm );
+        dm.arg    = mIFNum;
+        dm.iponly = mIPOnly;
+        dm.wait   = mWait;
+        daemon.Call( &dm );
 
-        if( opts.wait )
+        if( mWait )
         {
-            if( daemon_if_sem_wait( sem, opts.wait ) < 0 )
+            if( sem->Wait( mWait ) < 0 )
             {
                 fprintf( stdout, "Configuring IP address for interface lan%d is progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
             }
             else if( dm.msg == DCDE_IP_ALREADY_ASSIGNED )
             {
                 fprintf( stderr, "IP adress for interface lan%d was already configured.\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Release IP adress using /rel option first\n");
             }
             else
             {
                 fprintf( stdout, "Configured IP address for interface lan%d successfully.\n",
-                         opts.ifnum );
+                         mIFNum );
             }
 
-            daemon_if_sem_close( sem );
+            delete sem;
 
             return 0;
         }
@@ -244,7 +255,7 @@ int main( int argc, char *argv[])
         {
             case DCDE_NO_ERROR :
                 fprintf( stdout, "Configuring IP address for interface lan%d is progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 break;
 
             case DCDE_PIPE_ERROR :
@@ -253,24 +264,24 @@ int main( int argc, char *argv[])
                 break;
 
             case DCDE_INVALID_INTERFACE :
-                fprintf( stderr, "Invalid interface lan%d\n", opts.ifnum );
+                fprintf( stderr, "Invalid interface lan%d\n", mIFNum );
                     break;
 
             case DCDE_IP_ALREADY_ASSIGNED :
                 fprintf( stderr, "IP adress for interface lan%d was already configured.\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Release IP adress using /rel option first\n");
                 break;
 
             case DCDE_IP_ASSIGNING :
                 fprintf( stderr, "Configuring IP address for interface lan%d is still progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Please wait to finish it\n");
                 break;
 
             case DCDE_IP_RELEASING :
                 fprintf( stderr, "Releasing IP address for interface lan%d is progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Please wait to finish it\n");
                 break;
 
@@ -282,15 +293,15 @@ int main( int argc, char *argv[])
     else
     {
         dm.msg  = DCDM_RELEASE;
-        dm.arg  = opts.ifnum;
-        dm.wait = opts.wait;
-        daemon_call( &dm );
+        dm.arg  = mIFNum;
+        dm.wait = mWait;
+        daemon.Call( &dm );
 
         switch( dm.msg )
         {
             case DCDE_NO_ERROR :
                 fprintf( stdout, "Released IP address for interface lan%d successfully\n",
-                         opts.ifnum );
+                         mIFNum );
                 break;
 
             case DCDE_PIPE_ERROR :
@@ -299,28 +310,35 @@ int main( int argc, char *argv[])
                 break;
 
             case DCDE_INVALID_INTERFACE :
-                fprintf( stderr, "Invalid interface lan%d\n", opts.ifnum );
+                fprintf( stderr, "Invalid interface lan%d\n", mIFNum );
                 break;
 
             case DCDE_IP_NOT_ASSIGNED :
                 fprintf( stderr, "Interface lan%d is not under control of kipcfg\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Configure IP adress using /req option first\n");
                 break;
 
             case DCDE_IP_ASSIGNING :
                 fprintf( stderr, "Configuring IP address for interface lan%d is still progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Please wait to finish it first\n");
                 break;
 
             case DCDE_IP_RELEASING :
                 fprintf( stderr, "Releasing IP address for interface lan%d is already progressing...\n",
-                         opts.ifnum );
+                         mIFNum );
                 fprintf( stderr, "Please wait to finish it\n");
                 break;
         }
     }
 
     return 0;
+}
+
+int main( int argc, const char *argv[])
+{
+    KIPCFG kipcfg;
+
+    return kipcfg.Run( argc, argv );
 }

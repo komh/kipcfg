@@ -22,12 +22,21 @@
 #include "dhcp.h"
 #include "dhcp_socks.h"
 
+class DHCPClient
+{
+public :
+    DHCPClient( int ifnum, const DHCPSocks& ds ) : mIFNum( ifnum ),
+                                                   mDS( ds ) {};
+    ~DHCPClient() {};
 
-int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
-int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
-                   int state );
-int dhcpc_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
-int dhcpc_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp );
+    int Discover( struct dhcp_packet *dp );
+    int Request( struct dhcp_packet *dp, int state );
+    int Release( struct dhcp_packet *dp );
+    int Decline( struct dhcp_packet *dp );
 
+private :
+    int   mIFNum;
+    const DHCPSocks& mDS;
+};
 #endif
 

@@ -28,45 +28,45 @@
 
 #include "dhcp_socks.h"
 
-int dhcp_socks_init( struct dhcp_socks *ds )
+DHCPSocks::DHCPSocks()
 {
     int    flag;
     struct sockaddr_in client;
-    struct ifconfig   *ifc;
 
-    ds->server = socket( PF_INET, SOCK_DGRAM, IPPROTO_UDP );
-    if( ds->server < 0 )
+    mInitSuccess = false;
+
+    mServer = socket( PF_INET, SOCK_DGRAM, IPPROTO_UDP );
+    if( mServer < 0 )
     {
         log_msg("socket() for server failed : %s\n",
                 sock_strerror( sock_errno()));
 
-        return -1;
+        return;
     }
 
     flag = 1;
-    if( setsockopt( ds->server, SOL_SOCKET, SO_BROADCAST,
+    if( setsockopt( mServer, SOL_SOCKET, SO_BROADCAST,
                     &flag, sizeof( flag )) < 0 )
     {
         log_msg("setsockopt(SO_BROADCAST) failed : %s\n",
                 sock_strerror( sock_errno()));
 
-        return -1;
+        return;
     }
 
-    ds->client = socket( PF_INET, SOCK_DGRAM, IPPROTO_UDP );
-    if( ds->client < 0 )
+    mClient = socket( PF_INET, SOCK_DGRAM, IPPROTO_UDP );
+    if( mClient < 0 )
     {
         log_msg("socket() for client failed : %s\n",
                 sock_strerror( sock_errno()));
 
-        return -1;
+        return;
     }
 
     // without lo interface(LOOPBACK), IP broadcast does not work.
     // I don't know why
-    ifc = ifconfig_init( IFNUM_LOOPBACK, 0 );
-    ifconfig_set( ifc, htonl( INADDR_LOOPBACK ), htonl( NETMASK_HOST ));
-    ifconfig_done( ifc );
+    IFConfig ifc( IFNUM_LOOPBACK, 0 );
+    ifc.Set( htonl( INADDR_LOOPBACK ), htonl( NETMASK_HOST ));
 
     memset( &client, 0, sizeof( client ));
     client.sin_len         = sizeof( client );
@@ -74,19 +74,20 @@ int dhcp_socks_init( struct dhcp_socks *ds )
     client.sin_addr.s_addr = htonl( INADDR_ANY );
     client.sin_port        = htons( CLIENT_PORT );
 
-    if( bind( ds->client, ( struct sockaddr * )&client, sizeof( client )) < 0 )
+    if( bind( mClient, reinterpret_cast< struct sockaddr * >( &client ),
+              sizeof( client )) < 0 )
     {
         log_msg("bind() failed : %s\n", sock_strerror( sock_errno()));
 
-        return -1;
+        return;
     }
 
-    return 0;
+    mInitSuccess = true;
 }
 
-void dhcp_socks_done( struct dhcp_socks *ds )
+DHCPSocks::~DHCPSocks()
 {
-    soclose( ds->server );
-    soclose( ds->client );
+    soclose( mServer );
+    soclose( mClient );
 }
 

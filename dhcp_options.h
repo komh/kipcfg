@@ -21,24 +21,38 @@
 
 #include <types.h>
 
-#pragma pack( 1 )
-struct dhcp_options
+class DHCPOptionParser
 {
+public :
+    DHCPOptionParser() : mRouterList( NULL ), mDNSList( NULL ),
+                         mDomainName( NULL ) {};
+    ~DHCPOptionParser() { Free(); };
+
+    bool Parse( struct dhcp_packet* dp );
+
+    u_int8_t              GetMsgType() const { return mMsgType; };
+    const struct in_addr& GetSID() const { return mSID; };
+    u_int32_t             GetLeaseTime() const { return mLeaseTime; };
+    const struct in_addr& GetSubnetMask() const { return mSubnetMask; };
+    u_int8_t              GetRouterCount() const { return mRouterCount; };
+    const struct in_addr* GetRouterList() const { return mRouterList; };
+    u_int8_t              GetDNSCount() const { return mDNSCount; };
+    const struct in_addr* GetDNSList() const { return mDNSList; };
+    const char*           GetDomainName() const { return mDomainName; };
+
+private :
     // a part of decoded options
-    u_int8_t        msg_type;
-    struct in_addr  sid;
-    u_int32_t       lease_time;
-    struct in_addr  subnet_mask;
-    u_int8_t        router_count;
-    struct in_addr *router_list;
-    u_int8_t        dns_count;
-    struct in_addr *dns_list;
-    char           *domain_name;
+    u_int8_t        mMsgType;
+    struct in_addr  mSID;
+    u_int32_t       mLeaseTime;
+    struct in_addr  mSubnetMask;
+    u_int8_t        mRouterCount;
+    struct in_addr* mRouterList;
+    u_int8_t        mDNSCount;
+    struct in_addr* mDNSList;
+    char          * mDomainName;
+
+    void Free();
 };
-#pragma pack()
-
-struct dhcp_options *dhcp_options_parse( struct dhcp_packet *dp );
-void   dhcp_options_free( struct dhcp_options *dopts );
-
 #endif
 

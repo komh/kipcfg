@@ -54,12 +54,13 @@ static const char *dhcp_msg_type_str[] = {
     "DHCPLEASEACTIVE",
 };
 
-static void get_hw_info( int ifnum, struct dhcp_socks *ds, int *type, char *mac )
+static void get_hw_info( int ifnum, const DHCPSocks& ds, int *type, char *mac )
 {
     struct ifmib ifmib;
 
     memset( &ifmib, 0, sizeof( ifmib ));
-    os2_ioctl( ds->client, SIOSTATIF, ( caddr_t )&ifmib, sizeof( ifmib ));
+    os2_ioctl( ds.GetClient(), SIOSTATIF, ( caddr_t )&ifmib,
+               sizeof( ifmib ));
 
     if( type )
         *type = ifmib.iftable[ ifnum ].iftType;
@@ -68,12 +69,12 @@ static void get_hw_info( int ifnum, struct dhcp_socks *ds, int *type, char *mac 
         memcpy( mac, ifmib.iftable[ ifnum ].iftPhysAddr, 6 );
 }
 
-static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
+static int send_message( int ifnum, const DHCPSocks& ds, u_int8_t msg_type,
                          struct dhcp_packet *packet, int state )
 {
     struct sockaddr_in server;
     struct dhcp_packet dp;
-    struct dhcp_options *dopts;
+    DHCPOptionParser   dopts;
     int i;
 
     server.sin_len         = sizeof( server );
@@ -81,7 +82,7 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
     server.sin_addr.s_addr = htonl( INADDR_BROADCAST );
     server.sin_port        = htons( SERVER_PORT );
 
-    dopts = dhcp_options_parse( packet );
+    dopts.Parse( packet );
 
     memset( &dp, 0, sizeof( dp ));
 
@@ -91,7 +92,7 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
     dp.xid   = packet->xid;
     dp.flags = packet->flags;
 
-    get_hw_info( ifnum, ds, NULL, dp.chaddr );
+    get_hw_info( ifnum, ds, NULL, reinterpret_cast< char * >( dp.chaddr ));
 
     memcpy( dp.options, DHCP_OPTIONS_COOKIE, 4 );
     i = 4;
@@ -107,17 +108,19 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
                 case DHCPC_STATE_INIT :
                     dp.options[ i++ ] = DHO_DHCP_REQUESTED_ADDRESS;
                     dp.options[ i++ ] = 4;          // length
-                    *( struct in_addr * )&dp.options[ i ] = packet->yiaddr;
+                    *reinterpret_cast< struct in_addr * >
+                        ( &dp.options[ i ]) = packet->yiaddr;
                     i += 4;
 
                     dp.options[ i++ ] = DHO_DHCP_SERVER_IDENTIFIER;
                     dp.options[ i++ ] = 4;          // length
-                    *( struct in_addr * )&dp.options[ i ] = dopts->sid;
+                    *reinterpret_cast< struct in_addr * >
+                        ( &dp.options[ i ]) = dopts.GetSID();
                     i += 4;
                     break;
 
                 case DHCPC_STATE_RENEWING :
-                    server.sin_addr = dopts->sid;
+                    server.sin_addr = dopts.GetSID();
                     // fall through
 
                 case DHCPC_STATE_REBINDING :
@@ -127,13 +130,14 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
             break;
 
         case DHCPRELEASE :
-            server.sin_addr = dopts->sid;
+            server.sin_addr = dopts.GetSID();
 
             dp.ciaddr = packet->yiaddr;
 
             dp.options[ i++ ] = DHO_DHCP_SERVER_IDENTIFIER;
             dp.options[ i++ ] = 4;          // length
-            *( struct in_addr * )&dp.options[ i ] = dopts->sid;
+            *reinterpret_cast< struct in_addr * >( &dp.options[ i ]) =
+                dopts.GetSID();
             i += 4;
             break;
 
@@ -141,13 +145,14 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
         {
             dp.options[ i++ ] = DHO_DHCP_REQUESTED_ADDRESS;
             dp.options[ i++ ] = 4;          // length
-            *( struct in_addr * )&dp.options[ i ] =
+            *reinterpret_cast< struct in_addr * >( &dp.options[ i ]) =
                 packet->yiaddr.s_addr ? packet->yiaddr : packet->ciaddr;
             i += 4;
 
             dp.options[ i++ ] = DHO_DHCP_SERVER_IDENTIFIER;
             dp.options[ i++ ] = 4;          // length
-            *( struct in_addr * )&dp.options[ i ] = dopts->sid;
+            *reinterpret_cast< struct in_addr * >( &dp.options[ i ]) =
+                dopts.GetSID();
             i += 4;
             break;
         }
@@ -163,15 +168,14 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
 
     dp.options[ i++ ] = DHO_END;
 
-    dhcp_options_free( dopts );
-
     log_msg("lan%d : Sending %s(xid %x) message to %s...\n",
             ifnum,
             dhcp_msg_type_str[ msg_type ], packet->xid,
             inet_ntoa( server.sin_addr ));
 
-    if( sendto( ds->server, &dp, sizeof( dp ), 0,
-                ( struct sockaddr * )&server, sizeof( server )) < 0 )
+    if( sendto( ds.GetServer(), &dp, sizeof( dp ), 0,
+                reinterpret_cast< struct sockaddr * >( &server ),
+                sizeof( server )) < 0 )
     {
         log_msg("sendto() failed : %s\n", sock_strerror( sock_errno()));
 
@@ -181,7 +185,7 @@ static int send_message( int ifnum, struct dhcp_socks *ds, u_int8_t msg_type,
     return 0;
 }
 
-static int wait_reply( struct dhcp_socks *ds, struct dhcp_packet *dp, int sec )
+static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec )
 {
     struct sockaddr_in client;
     int name_len;
@@ -189,12 +193,12 @@ static int wait_reply( struct dhcp_socks *ds, struct dhcp_packet *dp, int sec )
     struct timeval tv;
     int rc;
 
-    FD_ZERO( &readfds ); FD_SET( ds->client, &readfds );
+    FD_ZERO( &readfds ); FD_SET( ds.GetClient(), &readfds );
 
     tv.tv_sec  = sec;
     tv.tv_usec = 0;
 
-    rc = select( ds->client + 1, &readfds, NULL, NULL, &tv );
+    rc = select( ds.GetClient() + 1, &readfds, NULL, NULL, &tv );
 
     if( rc < 0 )
     {
@@ -211,8 +215,9 @@ static int wait_reply( struct dhcp_socks *ds, struct dhcp_packet *dp, int sec )
     }
 
     name_len = sizeof( client );
-    if( recvfrom( ds->client, dp, sizeof( *dp ), 0,
-                  ( struct sockaddr * )&client, &name_len ) < 0 )
+    if( recvfrom( ds.GetClient(), dp, sizeof( *dp ), 0,
+                  reinterpret_cast< struct sockaddr * >( &client ),
+                  &name_len ) < 0 )
     {
         log_msg("recvfrom() failed : %s\n", sock_strerror( sock_errno()));
 
@@ -225,16 +230,14 @@ static int wait_reply( struct dhcp_socks *ds, struct dhcp_packet *dp, int sec )
 static int check_reply( struct dhcp_packet *dp,
                         u_int8_t want_msg_type, u_int32_t want_xid )
 {
-    struct    dhcp_options *dopts;
-    u_int8_t  msg_type;
-    struct    in_addr sid;
+    DHCPOptionParser dopts;
+    u_int8_t         msg_type;
+    struct           in_addr sid;
 
-    dopts = dhcp_options_parse( dp );
+    dopts.Parse( dp );
 
-    msg_type = dopts->msg_type;
-    sid      = dopts->sid;
-
-    dhcp_options_free( dopts );
+    msg_type = dopts.GetMsgType();
+    sid      = dopts.GetSID();
 
     if( msg_type == want_msg_type && dp->xid == want_xid )
         return 0;
@@ -256,7 +259,7 @@ static u_int32_t make_xid( void )
     return tv.tv_sec + tv.tv_usec;
 }
 
-int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int DHCPClient::Discover( struct dhcp_packet *dp )
 {
     u_int32_t xid;
     struct    dhcp_packet packet;
@@ -265,15 +268,15 @@ int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
     dp->xid   = xid = make_xid();
     dp->flags = htons( BOOTP_BROADCAST );
 
-    if( send_message( ifnum, ds, DHCPDISCOVER, dp, 0 ) < 0 )
+    if( send_message( mIFNum, mDS, DHCPDISCOVER, dp, 0 ) < 0 )
         return -1;
 
     do
     {
         packet = *dp;
 
-        log_msg("lan%d : Waiting DHCPOFFER(xid %x)...\n", ifnum, xid );
-        if( wait_reply( ds, &packet, DHCP_REPLY_WAIT_TIME ) <= 0 )
+        log_msg("lan%d : Waiting DHCPOFFER(xid %x)...\n", mIFNum, xid );
+        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME ) <= 0 )
             return -1;  // error or timeout
     } while( check_reply( &packet, DHCPOFFER, xid ));
 
@@ -282,8 +285,7 @@ int dhcpc_discover( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
     return 0;
 }
 
-int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
-                  int state )
+int DHCPClient::Request( struct dhcp_packet *dp, int state )
 {
     u_int32_t xid;
     struct    dhcp_packet packet;
@@ -296,15 +298,15 @@ int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
     xid       = dp->xid;
     dp->flags = htons( BOOTP_BROADCAST );
 
-    if( send_message( ifnum, ds, DHCPREQUEST, dp, state ) < 0 )
+    if( send_message( mIFNum, mDS, DHCPREQUEST, dp, state ) < 0 )
         return -1;
 
     do
     {
         packet = *dp;
 
-        log_msg("lan%d : Waiting DHCPACK(xid %x)...\n", ifnum, xid );
-        if( wait_reply( ds, &packet, DHCP_REPLY_WAIT_TIME ) <= 0 )
+        log_msg("lan%d : Waiting DHCPACK(xid %x)...\n", mIFNum, xid );
+        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME ) <= 0 )
             return -1;  // error or time out
     } while( check_reply( &packet, DHCPACK, xid ));
 
@@ -313,24 +315,24 @@ int dhcpc_request( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp,
     return 0;
 }
 
-int dhcpc_release( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int DHCPClient::Release( struct dhcp_packet *dp )
 {
     dp->xid   = make_xid();
     dp->flags = 0;
-    if( send_message( ifnum, ds, DHCPRELEASE, dp, 0 ) < 0 )
+    if( send_message( mIFNum, mDS, DHCPRELEASE, dp, 0 ) < 0 )
         return -1;
 
     return 0;
 }
 
-int dhcpc_decline( int ifnum, struct dhcp_socks *ds, struct dhcp_packet *dp )
+int DHCPClient::Decline( struct dhcp_packet *dp )
 {
     u_int32_t xid;
 
     // select xid and save it in order to idenfity it later
     dp->xid   = xid = make_xid();
     dp->flags = 0;
-    if( send_message( ifnum, ds, DHCPDECLINE, dp, 0 ) < 0 )
+    if( send_message( mIFNum, mDS, DHCPDECLINE, dp, 0 ) < 0 )
         return -1;
 
     return 0;

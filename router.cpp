@@ -34,11 +34,6 @@
 #include "router.h"
 
 #pragma pack( 1 )
-struct router
-{
-    int s;
-};
-
 struct rtentry
 {
     struct ortentry ortentry;
@@ -46,36 +41,32 @@ struct rtentry
 };
 #pragma pack()
 
-struct router *router_init( int ifnum )
+Router::Router( int ifnum )
 {
-    struct router *r;
+    mS = socket( PF_INET, SOCK_RAW, 0 );
 
-    r = ( struct router * )calloc( 1, sizeof( *r ));
-
-    r->s = socket( PF_INET, SOCK_RAW, 0 );
-
-    return r;
+    // to prevent an unused warning
+    (void)ifnum;
 }
 
-void router_done( struct router *r )
+Router::~Router()
 {
-    soclose( r->s );
-
-    free( r );
+    soclose( mS );
 }
 
-int router_add( struct router *r, u_long d, u_long g )
+int Router::Add( u_long d, u_long g )
 {
     struct rtentry      rte;
     struct sockaddr_in *sin;
 
     memset( &rte, 0, sizeof( rte ));
 
-    sin = ( struct sockaddr_in * )&rte.ortentry.rt_dst;
+    sin = reinterpret_cast< struct sockaddr_in * >( &rte.ortentry.rt_dst );
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = d;
 
-    sin = ( struct sockaddr_in * )&rte.ortentry.rt_gateway;
+    sin = reinterpret_cast< struct sockaddr_in * >
+                ( &rte.ortentry.rt_gateway );
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = g;
 
@@ -84,10 +75,10 @@ int router_add( struct router *r, u_long d, u_long g )
     if( !d )  // default gateway ?
         rte.ortentry.rt_flags |= RTF_GATEWAY;
 
-    return ioctl( r->s, SIOCADDRT, &rte );
+    return ioctl( mS, SIOCADDRT, &rte );
 }
 
-int router_delete_ip( struct router *r, u_long d, u_long g, int flag )
+int Router::DeleteIP( u_long d, u_long g, int flag )
 {
     struct rtentries rtentries;
     struct rtentry  *rtentry;
@@ -99,46 +90,54 @@ int router_delete_ip( struct router *r, u_long d, u_long g, int flag )
 
     memset( &rtentries, 0, sizeof( rtentries ));
 
-    if( os2_ioctl( r->s, SIOSTATRT, ( caddr_t )&rtentries,
+    if( os2_ioctl( mS, SIOSTATRT, ( caddr_t )&rtentries,
                    sizeof( rtentries )) < 0 )
         return -1;
 
-    rtentry = ( struct rtentry * )rtentries.rttable;
+    rtentry = reinterpret_cast< struct rtentry * >( rtentries.rttable );
     for( i = 0; i < rtentries.hostcount + rtentries.netcount; i++ )
     {
-        dst     = ( struct sockaddr_in * )&rtentry->ortentry.rt_dst;
-        gateway = ( struct sockaddr_in * )&rtentry->ortentry.rt_gateway;
+        dst     = reinterpret_cast< struct sockaddr_in * >
+                        ( &rtentry->ortentry.rt_dst );
+        gateway = reinterpret_cast< struct sockaddr_in * >
+                        ( &rtentry->ortentry.rt_gateway );
 
         if( d == dst->sin_addr.s_addr &&
             ( !g || g == gateway->sin_addr.s_addr ))
         {
             memset( &rte, 0, sizeof( rte ));
 
-            sin = ( struct sockaddr_in * )&rte.ortentry.rt_dst;
+            sin = reinterpret_cast< struct sockaddr_in * >
+                        ( &rte.ortentry.rt_dst );
             sin->sin_family = AF_INET;
             sin->sin_addr   = dst->sin_addr;
 
-            sin = ( struct sockaddr_in * )&rte.ortentry.rt_gateway;
+            sin = reinterpret_cast< struct sockaddr_in * >
+                        ( &rte.ortentry.rt_gateway );
             sin->sin_family = AF_INET;
             sin->sin_addr   = gateway->sin_addr;
 
-            if( ioctl( r->s, SIOCDELRT, &rte ) < 0 )
+            if( ioctl( mS, SIOCDELRT, &rte ) < 0 )
                 return -1;
 
             if( flag != ROUTER_DELETE_ALL )
                 break;
         }
 
-        rtentry = ( struct rtentry * )(( char * )rtentry +
-                                       sizeof( rtentry->ortentry ) +
-                                       strlen( rtentry->if_name ) + 1 );
+        rtentry = reinterpret_cast< struct rtentry * >(
+                    reinterpret_cast< char * >( rtentry ) +
+                        sizeof( rtentry->ortentry ) +
+                        strlen( rtentry->if_name ) + 1 );
     }
 
     return 0;
 }
 
-int router_delete_if( struct router *r, int ifnum )
+int Router::DeleteIF( int ifnum )
 {
+    // to prevent an unused warning
+    (void)ifnum;
+
     return 0;
 }
 
