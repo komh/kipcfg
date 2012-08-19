@@ -218,6 +218,13 @@ int KIPCFG::Run( int argc, const char *argv[])
             }
 
             sem = new DaemonIFSem( mIFNum );
+            if( !sem->mInitSuccess )
+            {
+                fprintf( stderr, "Cannot create a semaphore\n");
+
+                delete sem;
+                return 0;
+            }
         }
 
         dm.msg    = DCDM_REQUEST;
