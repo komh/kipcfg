@@ -55,7 +55,8 @@ dist : .SYMBOLIC
 	$(ZIP) kipcfg$(VER) kipcfgsrc.zip
 	-$(DEL) kipcfgsrc.zip
 
-bin : .SYMBOLIC kipcfg.exe readme.txt readme.eng
+bin : .SYMBOLIC &
+      kipcfg.exe readme.txt readme.eng
 	-$(DEL) kipcfg$(VER).zip
 	$(ZIP) kipcfg$(VER) $<
 
