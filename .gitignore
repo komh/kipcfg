@@ -1,0 +1,11 @@
+*.map
+*.obj
+*.exe
+*.zip
+*~?
+*.bak
+*.err
+*.log
+*.cmd
+*.txt
+med.lru
