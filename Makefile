@@ -21,7 +21,7 @@ ZIP = zip
 
 DEL = del
 
-.cpp.obj :
+.cpp.obj : .AUTODEPEND
 	$(CXX) $(CXXFLAGS) -fo=$@ $[@
 
 all : .SYMBOLIC kipcfg.exe
@@ -29,24 +29,6 @@ all : .SYMBOLIC kipcfg.exe
 kipcfg.exe : kipcfg.obj daemon.obj dhcp_socks.obj dhcpc.obj &
              dhcp_options.obj ifconfig.obj router.obj log.obj
 	$(LINK) $(LFLAGS) system os2v2 name $@ file { $< }
-
-kipcfg.obj : kipcfg.cpp daemon.h
-
-daemon.obj : daemon.cpp dhcp.h dhcpc.h dhcp_socks.h dhcp_options.h &
-             ifconfig.h router.h log.h daemon.h
-
-dhcp_socks.obj : dhcp_socks.cpp ifconfig.h log.h dhcp_socks.h
-
-dhcpc.obj : dhcpc.cpp daemon.h dhcp.h dhcp_options.h dhcp_socks.h log.h &
-            dhcpc.h
-
-dhcp_options.obj: dhcp_options.cpp dhcp.h log.h dhcp_options.h
-
-ifconfig.obj : ifconfig.cpp router.h log.h ifconfig.h
-
-router.obj : router.cpp log.h router.h
-
-log.obj : log.cpp log.h
 
 dist : .SYMBOLIC
 	$(MAKE) clean
