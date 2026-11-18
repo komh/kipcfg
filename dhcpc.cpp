@@ -253,13 +253,15 @@ static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec,
 }
 
 // want_rcvif : IP address of the interface for which a reply is expected
-static int check_reply( int ifnum, struct dhcp_packet *dp,
-                        struct in_addr rcvif, struct in_addr want_rcvif,
+static int check_reply( int ifnum, const DHCPSocks& ds,
+                        struct dhcp_packet *dp, struct in_addr rcvif,
+                        struct in_addr want_rcvif,
                         u_int8_t want_msg_type, u_int32_t want_xid )
 {
     DHCPOptionParser dopts;
     u_int8_t         msg_type;
     struct           in_addr sid;
+    char             mac[ 6 ];
     char             rcvif_str[ 16 ];
     char             want_rcvif_str[ 16 ];
 
@@ -278,6 +280,20 @@ static int check_reply( int ifnum, struct dhcp_packet *dp,
                 "of %s not %s. Ignore.\n",
                 ifnum, dhcp_msg_type_str[ msg_type ], dp->xid,
                 inet_ntoa( sid ), rcvif_str, want_rcvif_str );
+
+        return -1;
+    }
+
+    // not for me ?
+    get_hw_info( ifnum, ds, NULL, mac );
+    if( memcmp( dp->chaddr, mac, sizeof( mac )))
+    {
+        log_msg("lan%d : Ooops, received %s(xid %x) for "
+                "%02x:%02x:%02x:%02x:%02x:%02x from %s. Ignore.\n",
+                ifnum, dhcp_msg_type_str[ msg_type ], dp->xid,
+                dp->chaddr[ 0 ], dp->chaddr[ 1 ], dp->chaddr[ 2 ],
+                dp->chaddr[ 3 ], dp->chaddr[ 4 ], dp->chaddr[ 5 ],
+                inet_ntoa( sid ));
 
         return -1;
     }
@@ -328,7 +344,7 @@ int DHCPClient::Discover( struct dhcp_packet *dp )
         log_msg("lan%d : Waiting DHCPOFFER(xid %x)...\n", mIFNum, xid );
         if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME, &rcvif ) <= 0 )
             return -1;  // error or timeout
-    } while( check_reply( mIFNum, &packet, rcvif, want_rcvif,
+    } while( check_reply( mIFNum, mDS, &packet, rcvif, want_rcvif,
                           DHCPOFFER, xid ));
 
     *dp = packet;
@@ -365,7 +381,7 @@ int DHCPClient::Request( struct dhcp_packet *dp, int state )
         log_msg("lan%d : Waiting DHCPACK(xid %x)...\n", mIFNum, xid );
         if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME, &rcvif ) <= 0 )
             return -1;  // error or time out
-    } while( check_reply( mIFNum, &packet, rcvif, want_rcvif,
+    } while( check_reply( mIFNum, mDS, &packet, rcvif, want_rcvif,
                           DHCPACK, xid ));
 
     *dp = packet;
