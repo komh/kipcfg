@@ -28,6 +28,32 @@
 
 #include "dhcp_socks.h"
 
+#ifndef SO_L_BROADCAST
+#define SO_L_BROADCAST 0x0200   // limited broadcast sent on all IFs
+#endif
+
+// SO_L_BROADCAST does two things on the OS/2 TCP/IP stack(AFINET.SYS)
+//   - send : sendto() 255.255.255.255 goes out of all the interfaces which
+//            are up, without routing table and without rewriting the
+//            destination to the broadcast address of the primary interface
+//   - recv : recvfrom() stores the IPv4 address of the receiving interface
+//            into the first 4 bytes of sin_zero of the source address
+static int set_l_broadcast( int s, const char *name )
+{
+    int flag = 1;
+
+    if( setsockopt( s, SOL_SOCKET, SO_L_BROADCAST,
+                    &flag, sizeof( flag )) < 0 )
+    {
+        log_msg("setsockopt(SO_L_BROADCAST) for %s failed : %s\n",
+                name, sock_strerror( sock_errno()));
+
+        return -1;
+    }
+
+    return 0;
+}
+
 DHCPSocks::DHCPSocks()
 {
     int    flag;
@@ -54,6 +80,9 @@ DHCPSocks::DHCPSocks()
         return;
     }
 
+    if( set_l_broadcast( mServer, "server") < 0 )
+        return;
+
     mClient = socket( PF_INET, SOCK_DGRAM, IPPROTO_UDP );
     if( mClient < 0 )
     {
@@ -62,6 +91,10 @@ DHCPSocks::DHCPSocks()
 
         return;
     }
+
+    // to know which interface received a reply
+    if( set_l_broadcast( mClient, "client") < 0 )
+        return;
 
     // without lo interface(LOOPBACK), IP broadcast does not work.
     // I don't know why
