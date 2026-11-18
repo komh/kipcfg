@@ -139,9 +139,7 @@ static void ip_assign( void *arg )
 {
     struct if_info *info = reinterpret_cast< struct if_info * >( arg );
     DaemonIFSem    *sem;
-    struct in_addr in_addr;
     int    init_state;
-    int    use_broadcast;
     time_t next_time;
 
     info->state = DHCPC_STATE_INIT;
@@ -228,17 +226,24 @@ static void ip_assign( void *arg )
             break;
         }
 
-        IFConfig ifc( info->ifnum, init_state );
+        IFConfig ifc( info->ifnum, 0 );
 
-        use_broadcast = info->state == DHCPC_STATE_INIT ||
-                        info->state == DHCPC_STATE_REBINDING;
-
-        if( use_broadcast )
+        // On INIT state, the interface must not have any IP address. Set it
+        // to 0.0.0.0 instead of leaving it unassigned. Otherwise the stack
+        // does not report the receiving interface via sin_zero.
+        //
+        // Broadcast does not need a route to 255.255.255.255 any more,
+        // because SO_L_BROADCAST sends it out of all the interfaces. And a
+        // reply via other interfaces is filtered out by the address of the
+        // receiving interface. Interfaces are processed one by one under
+        // info->hmtx, so only this interface is 0.0.0.0 while waiting a reply
+        // as long as the other interfaces have their IP addresses.
+        if( init_state )
         {
-            r.DeleteIP( htonl( ROUTER_BROADCAST ), 0, ROUTER_DELETE_ALL );
+            u_long addr;
 
-            ifc.Get( &in_addr.s_addr, NULL );
-            r.Add( htonl( ROUTER_BROADCAST ), in_addr.s_addr );
+            if( ifc.Get( &addr, NULL ) < 0 || addr != htonl( INADDR_ANY ))
+                ifc.Set( htonl( INADDR_ANY ), htonl( NETMASK_HOST ));
         }
 
         if(( !init_state || info->dhcpc->Discover( &info->dp ) == 0 ) &&
@@ -267,9 +272,6 @@ static void ip_assign( void *arg )
                 log_msg("\tDomain name = %s\n", dopts.GetDomainName());
             }
             log_msg("\tDHCP server = %s\n", inet_ntoa( dopts.GetSID()));
-
-            if( use_broadcast )
-                r.DeleteIP( htonl( ROUTER_BROADCAST ), 0, ROUTER_DELETE_ALL );
 
             if( init_state )
             {
