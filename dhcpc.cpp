@@ -204,6 +204,40 @@ static int send_message( int ifnum, const DHCPSocks& ds, u_int8_t msg_type,
     return 0;
 }
 
+// discard replies already queued in the receive buffer. They are replies
+// to the previous requests, for example, ones arrived after timeout.
+static void flush_replies( int ifnum, const DHCPSocks& ds )
+{
+    struct dhcp_packet dp;
+    struct sockaddr_in client;
+    int name_len;
+    fd_set readfds;
+    struct timeval tv;
+    int count = 0;
+
+    for(;;)
+    {
+        FD_ZERO( &readfds ); FD_SET( ds.GetClient(), &readfds );
+
+        tv.tv_sec  = 0;
+        tv.tv_usec = 0;
+
+        if( select( ds.GetClient() + 1, &readfds, NULL, NULL, &tv ) <= 0 )
+            break;
+
+        name_len = sizeof( client );
+        if( recvfrom( ds.GetClient(), &dp, sizeof( dp ), 0,
+                      reinterpret_cast< struct sockaddr * >( &client ),
+                      &name_len ) < 0 )
+            break;
+
+        count++;
+    }
+
+    if( count > 0 )
+        log_msg("lan%d : Discarded %d stale replies\n", ifnum, count );
+}
+
 // rcvif : IP address of the interface which received a reply
 static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec,
                        struct in_addr *rcvif )
@@ -334,6 +368,8 @@ int DHCPClient::Discover( struct dhcp_packet *dp )
     dp->xid   = xid = make_xid();
     dp->flags = htons( BOOTP_BROADCAST );
 
+    flush_replies( mIFNum, mDS );
+
     if( send_message( mIFNum, mDS, DHCPDISCOVER, dp, 0 ) < 0 )
         return -1;
 
@@ -370,6 +406,8 @@ int DHCPClient::Request( struct dhcp_packet *dp, int state )
 
     xid       = dp->xid;
     dp->flags = htons( BOOTP_BROADCAST );
+
+    flush_replies( mIFNum, mDS );
 
     if( send_message( mIFNum, mDS, DHCPREQUEST, dp, state ) < 0 )
         return -1;
