@@ -96,10 +96,14 @@ DHCPSocks::DHCPSocks()
     if( set_l_broadcast( mClient, "client") < 0 )
         return;
 
-    // without lo interface(LOOPBACK), IP broadcast does not work.
-    // I don't know why
+    // If none of the interfaces is enabled, bind() fails.
+    // It's best to enable the requested interface by assigning 0.0.0.0, but
+    // it's not possible to know the interface here. So enables LOOPBACK
+    // interface.
+    u_long addr;
     IFConfig ifc( IFNUM_LOOPBACK, 0 );
-    ifc.Set( htonl( INADDR_LOOPBACK ), htonl( NETMASK_HOST ));
+    if( ifc.Get( &addr, NULL ) == -1 || addr != htonl( INADDR_LOOPBACK ))
+        ifc.Set( htonl( INADDR_LOOPBACK ), htonl( NETMASK_HOST ));
 
     memset( &client, 0, sizeof( client ));
     client.sin_len         = sizeof( client );
