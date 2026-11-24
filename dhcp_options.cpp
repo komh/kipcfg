@@ -40,6 +40,9 @@ bool DHCPOptionParser::Parse( struct dhcp_packet *dp )
 
     Free();
 
+    // options may not have a server identifier, for example, DHCPNAK
+    mSID.s_addr = htonl( INADDR_ANY );
+
     for( i = 4; ( code = dp->options[ i++ ]) != DHO_END; )
     {
         if( code == DHO_PAD )
@@ -59,7 +62,7 @@ bool DHCPOptionParser::Parse( struct dhcp_packet *dp )
                 break;
 
             case DHO_DHCP_LEASE_TIME :
-                mLeaseTime = *reinterpret_cast< u_int32_t * >( data );
+                mLeaseTime = ntohl( *reinterpret_cast< u_int32_t * >( data ));
                 break;
 
             case DHO_SUBNET_MASK :
