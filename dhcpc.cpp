@@ -238,9 +238,10 @@ static void flush_replies( int ifnum, const DHCPSocks& ds )
         log_msg("lan%d : Discarded %d stale replies\n", ifnum, count );
 }
 
+// from  : IP address of the sender of a reply
 // rcvif : IP address of the interface which received a reply
 static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec,
-                       struct in_addr *rcvif )
+                       struct in_addr *from, struct in_addr *rcvif )
 {
     struct sockaddr_in client;
     int name_len;
@@ -279,6 +280,8 @@ static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec,
         return -1;
     }
 
+    *from = client.sin_addr;
+
     // with SO_L_BROADCAST, the first 4 bytes of sin_zero have the IP address
     // of the receiving interface
     memcpy( rcvif, client.sin_zero, sizeof( *rcvif ));
@@ -288,8 +291,8 @@ static int wait_reply( const DHCPSocks& ds, struct dhcp_packet *dp, int sec,
 
 // want_rcvif : IP address of the interface for which a reply is expected
 static int check_reply( int ifnum, const DHCPSocks& ds,
-                        struct dhcp_packet *dp, struct in_addr rcvif,
-                        struct in_addr want_rcvif,
+                        struct dhcp_packet *dp, struct in_addr from,
+                        struct in_addr rcvif, struct in_addr want_rcvif,
                         u_int8_t want_msg_type, u_int32_t want_xid )
 {
     DHCPOptionParser dopts;
@@ -303,6 +306,11 @@ static int check_reply( int ifnum, const DHCPSocks& ds,
 
     msg_type = dopts.GetMsgType();
     sid      = dopts.GetSID();
+
+    // some replies such as DHCPNAK from VirtualBox NAT do not have the server
+    // identifier. Use the sender address instead for the log.
+    if( sid.s_addr == htonl( INADDR_ANY ))
+        sid = from;
 
     // received via another interface ?
     if( rcvif.s_addr != want_rcvif.s_addr )
@@ -357,11 +365,13 @@ int DHCPClient::Discover( struct dhcp_packet *dp )
 {
     u_int32_t xid;
     struct    dhcp_packet packet;
+    struct    in_addr from;
     struct    in_addr rcvif;
     struct    in_addr want_rcvif;
 
     // a reply should be received via this interface
     want_rcvif = get_if_addr( mIFNum, mDS );
+    from.s_addr  = htonl( INADDR_ANY );
     rcvif.s_addr = htonl( INADDR_ANY );
 
     // select xid and save it in order to idenfity it later
@@ -378,9 +388,10 @@ int DHCPClient::Discover( struct dhcp_packet *dp )
         packet = *dp;
 
         log_msg("lan%d : Waiting DHCPOFFER(xid %x)...\n", mIFNum, xid );
-        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME, &rcvif ) <= 0 )
+        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME,
+                        &from, &rcvif ) <= 0 )
             return -1;  // error or timeout
-    } while( check_reply( mIFNum, mDS, &packet, rcvif, want_rcvif,
+    } while( check_reply( mIFNum, mDS, &packet, from, rcvif, want_rcvif,
                           DHCPOFFER, xid ));
 
     *dp = packet;
@@ -392,11 +403,13 @@ int DHCPClient::Request( struct dhcp_packet *dp, int state )
 {
     u_int32_t xid;
     struct    dhcp_packet packet;
+    struct    in_addr from;
     struct    in_addr rcvif;
     struct    in_addr want_rcvif;
 
     // a reply should be received via this interface
     want_rcvif = get_if_addr( mIFNum, mDS );
+    from.s_addr  = htonl( INADDR_ANY );
     rcvif.s_addr = htonl( INADDR_ANY );
 
     // save xid from DHCPOFFER provided by server to identify it later
@@ -417,9 +430,10 @@ int DHCPClient::Request( struct dhcp_packet *dp, int state )
         packet = *dp;
 
         log_msg("lan%d : Waiting DHCPACK(xid %x)...\n", mIFNum, xid );
-        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME, &rcvif ) <= 0 )
+        if( wait_reply( mDS, &packet, DHCP_REPLY_WAIT_TIME,
+                        &from, &rcvif ) <= 0 )
             return -1;  // error or time out
-    } while( check_reply( mIFNum, mDS, &packet, rcvif, want_rcvif,
+    } while( check_reply( mIFNum, mDS, &packet, from, rcvif, want_rcvif,
                           DHCPACK, xid ));
 
     *dp = packet;
