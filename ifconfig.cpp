@@ -60,7 +60,12 @@ static int call_ifconfig( int ifnum, const char *addr, const char *netmask )
     }
     argv[ i ] = NULL;
 
-    return spawnvp( P_WAIT, "ifconfig.exe", argv );
+    i = spawnvp( P_WAIT, "ifconfig.exe", argv );
+    if( i != 0 )
+        log_msg("%s: ifconfig.exe returned error code = %d\n",
+                if_names[ ifnum ], i );
+
+    return i;
 }
 
 IFConfig::IFConfig( int ifnum, int assign_priv_ip ) : mR( ifnum )
