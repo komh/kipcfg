@@ -62,8 +62,21 @@ static int call_ifconfig( int ifnum, const char *addr, const char *netmask )
 
     i = spawnvp( P_WAIT, "ifconfig.exe", argv );
     if( i != 0 )
-        log_msg("%s: ifconfig.exe returned error code = %d\n",
-                if_names[ ifnum ], i );
+    {
+        char msg[ 256 ];
+
+        if( netmask )
+            snprintf( msg, sizeof( msg ),
+                      "%s : [%s %s %s %s %s] failed! error = %d\n",
+                      if_names[ ifnum ], argv[ 0 ], argv[ 1 ], argv[ 2 ],
+                      argv[ 3 ], argv[ 4 ], i);
+        else
+            snprintf( msg, sizeof( msg ),
+                      "%s : [%s %s %s] failed! error = %d\n",
+                      if_names[ ifnum ], argv[ 0 ], argv[ 1 ], argv[ 2 ], i );
+
+        log_msg("%s", msg );
+    }
 
     return i;
 }
