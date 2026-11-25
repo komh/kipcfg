@@ -46,39 +46,24 @@ static const char *if_names[] = {"lan0", "lan1", "lan2", "lan3", "lan4",
 //   3. Add a route table entry to a subnet using a interface
 static int call_ifconfig( int ifnum, const char *addr, const char *netmask )
 {
-    const char *argv[ 6 ];
-    int i;
+    char cmd[ 128 ];
+    int rc;
 
-    i = 0;
-    argv[ i++ ] = "ifconfig.exe";
-    argv[ i++ ] = if_names[ ifnum ];
-    argv[ i++ ] = addr;
-    if( netmask )
-    {
-        argv[ i++ ] = "netmask";
-        argv[ i++ ] = netmask;
-    }
-    argv[ i ] = NULL;
+    // SIOCAIFADDR always fails with EINVAL for 0.0.0.0, because the stack
+    // rejects the interface route of which gateway is 0.0.0.0. The address
+    // is set anyway, so hide the error message of ifconfig.exe. Otherwise,
+    // CONFIG.SYS processing stops at boot. Use system() to redirect only
+    // stderr of ifconfig.exe.
+    snprintf( cmd, sizeof( cmd ), "ifconfig.exe %s %s%s%s%s",
+              if_names[ ifnum ], addr,
+              netmask ? " netmask " : "", netmask ? netmask : "",
+              !strcmp( addr, "0.0.0.0") ? " 2>nul" : "");
 
-    i = spawnvp( P_WAIT, "ifconfig.exe", argv );
-    if( i != 0 )
-    {
-        char msg[ 256 ];
+    rc = system( cmd );
+    if( rc != 0 )
+        log_msg("%s : [%s] failed! error = %d\n", if_names[ ifnum ], cmd, rc );
 
-        if( netmask )
-            snprintf( msg, sizeof( msg ),
-                      "%s : [%s %s %s %s %s] failed! error = %d\n",
-                      if_names[ ifnum ], argv[ 0 ], argv[ 1 ], argv[ 2 ],
-                      argv[ 3 ], argv[ 4 ], i);
-        else
-            snprintf( msg, sizeof( msg ),
-                      "%s : [%s %s %s] failed! error = %d\n",
-                      if_names[ ifnum ], argv[ 0 ], argv[ 1 ], argv[ 2 ], i );
-
-        log_msg("%s", msg );
-    }
-
-    return i;
+    return rc;
 }
 
 IFConfig::IFConfig( int ifnum, int assign_priv_ip ) : mR( ifnum )
