@@ -39,6 +39,8 @@ public :
 
     int Get( u_long *addr, u_long *netmask );
     int Set( u_long addr, u_long netmask );
+    int GetFlags( long *flags );
+    int SetFlags( long flags );
 
 private :
     int     mIFNum;

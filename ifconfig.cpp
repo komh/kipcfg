@@ -134,4 +134,28 @@ int IFConfig::Set( u_long addr, u_long netmask )
     return call_ifconfig( mIFNum, addr_name, mask_name );
 }
 
+int IFConfig::GetFlags( long *flags )
+{
+    struct ifreq ifreq;
 
+    if( !flags )
+        return -1;
+
+    strcpy( ifreq.ifr_name, if_names[ mIFNum ]);
+    if( ioctl( mS, SIOCGIFFLAGS, &ifreq ) < 0 )
+        return -1;
+
+    *flags = ifreq.ifr_flags;
+
+    return 0;
+}
+
+int IFConfig::SetFlags( long flags )
+{
+    struct ifreq ifreq;
+
+    strcpy( ifreq.ifr_name, if_names[ mIFNum ]);
+    ifreq.ifr_flags = flags;
+
+    return ioctl( mS, SIOCSIFFLAGS, &ifreq );
+}

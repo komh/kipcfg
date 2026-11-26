@@ -226,6 +226,7 @@ static void ip_assign( void *arg )
             break;
         }
 
+        long saved_flags[ IF_INFO_ENTRIES + 1 /* lo */];
         IFConfig ifc( info->ifnum, 0 );
 
         // On INIT state, the interface must not have any IP address. Set it
@@ -244,6 +245,19 @@ static void ip_assign( void *arg )
 
             if( ifc.Get( &addr, NULL ) < 0 || addr != htonl( INADDR_ANY ))
                 ifc.Set( htonl( INADDR_ANY ), htonl( NETMASK_HOST ));
+
+            // if there are any interfaces with 0.0.0.0, then make them DOWN
+            for( int i = 0; i <= IF_INFO_ENTRIES; i++ )
+            {
+                IFConfig ifconf( i, 0 );
+
+                saved_flags[ i ] = -1L;
+                if( ifconf.Get( &addr, NULL ) == 0 && addr == 0 && ifconf.GetFlags( &saved_flags[ i ]) == 0 )
+                    ifconf.SetFlags( saved_flags[ i ] & ~IFF_UP );
+            }
+
+            // make the requested interface UP
+            ifc.SetFlags( saved_flags[ info->ifnum ] | IFF_UP );
         }
 
         if(( !init_state || info->dhcpc->Discover( &info->dp ) == 0 ) &&
@@ -277,6 +291,9 @@ static void ip_assign( void *arg )
             {
                 ifc.Set( info->dp.yiaddr.s_addr,
                          dopts.GetSubnetMask().s_addr );
+
+                // make sure that the requested interface is UP after restoring
+                saved_flags[ info->ifnum ] |= IFF_UP;
 
                 if( !info->iponly )
                 {
@@ -313,6 +330,20 @@ static void ip_assign( void *arg )
 
                 delete sem;
                 sem = NULL;
+            }
+        }
+
+        if( init_state )
+        {
+            // restore the flags of interfaces
+            for( int i = 0; i <= IF_INFO_ENTRIES; i++ )
+            {
+                if( saved_flags[ i ] != -1 )
+                {
+                    IFConfig ifconf( i, 0 );
+
+                    ifconf.SetFlags( saved_flags[ i ]);
+                }
             }
         }
 
