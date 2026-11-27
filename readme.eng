@@ -1,4 +1,4 @@
-                                kipcfg v0.1.1
+                                kipcfg v0.2.0
                                ---------------
                             
 1. Introduction
@@ -12,7 +12,7 @@ server.
   
   - OS/2 Warp v4 for Korean with FixPak #15
   
-  - Open Watcom v1.8
+  - Open Watcom v2.0.1
   
 3. Requirement
 --------------
@@ -61,8 +61,6 @@ server.
 
   - Do not check the conflict of the IP address allocated from DHCP server
   
-  - Use 172.xx.100.100 temporarily( xx is 16 ~ 31 )
-  
   - Activate LOOPBACK interface
   
 9. TODOs...
@@ -72,11 +70,19 @@ server.
   
   - Check the conflict of IP address
   
-  - Do not use temporary IP address
-  
 10. History
 ---------------
 
+  - v0.2.0 ( 2026/11/27 )
+    .Changed the language from C to C++
+    .Changed compiler to Open Watcom v2.0.1
+    .Check the validity of an interface more strictly
+    .Use 0.0.0.0 as IBM dhcpcd.exe does instead of using private IP addrs
+    .Log information for DHCP servers and ifconfig.exe in more detail
+    .Processing CONFIG.SYS stops due to an error message from ifconfig.exe
+     called by kipcfg.exe. Fixed
+    .Lease time is used as is in network order byte. Fixed
+    
   - v0.1.1 ( 2011/03/01 )
     .Reduced a reply-wait-time from 11 seconds to 5 seconds
     ./wait option accepts a maximum wait time as a parameter
@@ -88,7 +94,7 @@ server.
 11. Compilation
 ---------------
  
-  All you have to do is to install Open Watcom v1.8 to compile kipcfg.
+  All you have to do is to install Open Watcom v2.0.1 to compile kipcfg.
   Now, enter 'wmake' on command prompt.
   
 12. Modules
@@ -102,15 +108,17 @@ server.
   If you are satisfied with this program and want to donate to me, please visit
 the following URL.
 
-    http://www.ecomstation.co.kr/komh/donate.html
+    https://www.os2.kr/komh/os2factory/
+
+  Or, please click the Ads in the following blog.
+
+    https://lvzuufx.blogspot.com/
 
 14. Contact
 -----------
 
-  e-mail : komh@chollian.net
-  ICQ    : 124861818
-  MSN    : komh@chollian.net
-  IRC    : lvzuufx, #os2 at HANIRC(irc.hanirc.org)
+  Please use a issue tracker of github.
+
+    https://github.com/komh/kipcfg/issues
                
                                                        KO Myung-Hun
-               

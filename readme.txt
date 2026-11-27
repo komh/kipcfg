@@ -1,4 +1,4 @@
-                                kipgcfg v0.1.1
+                                kipgcfg v0.2.0
                                ----------------
                             
 1. 소개
@@ -11,7 +11,7 @@
   
   - 한국어판 OS/2 Warp v4 with FixPak #15
   
-  - Open Watcom v1.8
+  - Open Watcom v2.0.1
       
 3. 실행에 필요한 환경
 ---------------------
@@ -59,8 +59,6 @@
 
   - DHCP 로부터 할당받은 IP 주소의 충돌 여부를 확인하지 않음
   
-  - 172.xx.100.100 IP 주소를 임시로 사용함( xx 는 16 ~ 31 )
-  
   - LOOPBACK 인터페이스가 활성화 됨
   
 9. 할 것들...
@@ -70,11 +68,18 @@
   
   - 할당받은 IP 주소 충돌 확인하기
   
-  - 임시 IP 주소 없이 통신하기
-  
 10. 판번호 보기
 ---------------
 
+  - v0.2.0 ( 2026/11/27 )
+    .C 언어 대신에 C++ 을 사용함
+    .컴파일러를 Open Watcom v2.0.1로 바꿈
+    .인터페이스가 올바른지 더 엄격하게 확인함
+    .임시 사설 IP 주소 대신에 IBM dhcpcd.exe 처럼 0.0.0.0 을 사용함
+    .로그 파일에 서버, ifconfig.exe 관련 정보를 더 자세하게 기록함
+    .CONFIG.SYS 를 처리하는 동안 ifconfig.exe 에러 메시지 때문에 멈춤. 고침.
+    .임대 시간을 네트워크 바이트 순서로 처리함. 고침.
+    
   - v0.1.1 ( 2011/03/01 )
     .응답 대기 시간 11초에서 5초로 줄임
     ./wait 선택사항으로 최대 대기 시간 지정
@@ -86,7 +91,7 @@
 11. 소스 컴파일 하기
 --------------------
  
-  소스를 컴파일하기 위해서는 Open Watcom v1.8 이 필요합니다.
+  소스를 컴파일하기 위해서는 Open Watcom v2.0.1 이 필요합니다.
   이 모든 것이 준비되었다면, 해당 디렉토리에서 'wmake' 를 실행하시면 됩니다.
   
 12. 모듈 설명
@@ -99,15 +104,17 @@
 
   이 프로그램이 마음에 들어 후원하고 싶으시면, 아래 URL 을 방문해 주십시오.
 
-    http://www.ecomstation.co.kr/komh/donate.html
+    https://www.os2.kr/komh/os2factory/
+
+  또는 다음 블로그에서 광고를 클릭해 주십시오.
+
+    https://lvzuufx.blogspot.com/
     
 14. 하고 싶은 말이 있을 때...
 -----------------------------
 
-  e-mail : komh@chollian.net
-  ICQ    : 124861818
-  MSN    : komh@chollian.net
-  IRC    : lvzuufx, #os2 at HANIRC(irc.hanirc.org)
+  github 의 이슈 트래커를 이용해 주십시오.
+
+      https://github.com/komh/kipcfg/issues
                
                                                        만든이 : 고명훈
-               
